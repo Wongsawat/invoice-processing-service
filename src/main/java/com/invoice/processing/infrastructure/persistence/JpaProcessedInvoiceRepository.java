@@ -24,7 +24,7 @@ public interface JpaProcessedInvoiceRepository extends JpaRepository<ProcessedIn
     /**
      * Find by source invoice ID
      */
-    Optional<ProcessedInvoiceEntity> findBySourceInvoiceId(UUID sourceInvoiceId);
+    Optional<ProcessedInvoiceEntity> findBySourceInvoiceId(String sourceInvoiceId);
 
     /**
      * Find by processing status

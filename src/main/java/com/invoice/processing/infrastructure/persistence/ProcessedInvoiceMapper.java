@@ -4,9 +4,7 @@ import com.invoice.processing.domain.model.*;
 import com.invoice.processing.infrastructure.persistence.InvoicePartyEntity.PartyType;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Mapper between domain model and JPA entities
@@ -20,7 +18,7 @@ public class ProcessedInvoiceMapper {
     public ProcessedInvoiceEntity toEntity(ProcessedInvoice domain) {
         ProcessedInvoiceEntity entity = ProcessedInvoiceEntity.builder()
             .id(domain.getId().value())
-            .sourceInvoiceId(UUID.fromString(domain.getSourceInvoiceId()))
+            .sourceInvoiceId(domain.getSourceInvoiceId())
             .invoiceNumber(domain.getInvoiceNumber())
             .issueDate(domain.getIssueDate())
             .dueDate(domain.getDueDate())
@@ -33,7 +31,7 @@ public class ProcessedInvoiceMapper {
             .errorMessage(domain.getErrorMessage())
             .createdAt(domain.getCreatedAt())
             .completedAt(domain.getCompletedAt())
-            .parties(new ArrayList<>())
+            .parties(new HashSet<>())
             .lineItems(new ArrayList<>())
             .build();
 
@@ -81,7 +79,7 @@ public class ProcessedInvoiceMapper {
         // Build domain object
         return ProcessedInvoice.builder()
             .id(InvoiceId.from(entity.getId().toString()))
-            .sourceInvoiceId(entity.getSourceInvoiceId().toString())
+            .sourceInvoiceId(entity.getSourceInvoiceId())
             .invoiceNumber(entity.getInvoiceNumber())
             .issueDate(entity.getIssueDate())
             .dueDate(entity.getDueDate())

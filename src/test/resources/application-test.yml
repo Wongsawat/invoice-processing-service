@@ -1,0 +1,36 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: test-group
+      enable-auto-commit: false
+
+  flyway:
+    enabled: false
+
+app:
+  kafka:
+    topics:
+      invoice-received: invoice.received.test
+      invoice-processed: invoice.processed.test
+      pdf-generation-requested: pdf.generation.requested.test
+
+logging:
+  level:
+    root: WARN
+    com.invoice.processing: INFO

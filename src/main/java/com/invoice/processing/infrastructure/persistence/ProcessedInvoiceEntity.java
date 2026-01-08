@@ -9,9 +9,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * JPA Entity for ProcessedInvoice aggregate
@@ -34,8 +32,8 @@ public class ProcessedInvoiceEntity {
     @Column(name = "id", nullable = false)
     private UUID id;
 
-    @Column(name = "source_invoice_id", nullable = false)
-    private UUID sourceInvoiceId;
+    @Column(name = "source_invoice_id", nullable = false, length = 100)
+    private String sourceInvoiceId;
 
     @Column(name = "invoice_number", nullable = false, length = 50)
     private String invoiceNumber;
@@ -82,7 +80,7 @@ public class ProcessedInvoiceEntity {
     // Relationships
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
-    private List<InvoicePartyEntity> parties = new ArrayList<>();
+    private Set<InvoicePartyEntity> parties = new HashSet<>();
 
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("lineNumber ASC")

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.invoice.processing.domain.event.InvoiceProcessedEvent;
 import com.invoice.processing.domain.event.InvoiceReceivedEvent;
 import com.invoice.processing.domain.event.PdfGenerationRequestedEvent;
+import com.invoice.processing.domain.event.XmlSigningRequestedEvent;
 import com.invoice.processing.domain.model.InvoiceId;
 import com.invoice.processing.domain.model.ProcessedInvoice;
 import com.invoice.processing.domain.model.ProcessingStatus;
@@ -75,22 +76,22 @@ public class InvoiceProcessingService {
             );
             eventPublisher.publishInvoiceProcessed(processedEvent);
 
-            // Request PDF generation
-            saved.requestPdfGeneration();
+            // Request XML signing
+            saved.requestPdfGeneration(); // Note: this state transition is still relevant
             invoiceRepository.save(saved);
 
             // Prepare invoice data JSON
             String invoiceDataJson = createInvoiceDataJson(saved);
 
-            // Publish PDF generation request
-            PdfGenerationRequestedEvent pdfEvent = new PdfGenerationRequestedEvent(
+            // Publish XML signing request
+            XmlSigningRequestedEvent xmlSigningEvent = new XmlSigningRequestedEvent(
                 saved.getId().toString(),
                 saved.getInvoiceNumber(),
                 saved.getOriginalXml(),
                 invoiceDataJson,
                 event.getCorrelationId()
             );
-            eventPublisher.publishPdfGenerationRequested(pdfEvent);
+            eventPublisher.publishXmlSigningRequested(xmlSigningEvent);
 
             log.info("Successfully processed invoice: {}", saved.getInvoiceNumber());
 

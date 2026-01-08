@@ -79,17 +79,11 @@ public class ProcessedInvoiceRepositoryImpl implements ProcessedInvoiceRepositor
     public Optional<ProcessedInvoice> findBySourceInvoiceId(String sourceInvoiceId) {
         log.debug("Finding invoice by source ID: {}", sourceInvoiceId);
 
-        try {
-            UUID uuid = UUID.fromString(sourceInvoiceId);
-            return jpaRepository.findBySourceInvoiceId(uuid)
-                .map(entity -> {
-                    log.debug("Found invoice: {}", entity.getInvoiceNumber());
-                    return mapper.toDomain(entity);
-                });
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid source invoice ID format: {}", sourceInvoiceId);
-            return Optional.empty();
-        }
+        return jpaRepository.findBySourceInvoiceId(sourceInvoiceId)
+            .map(entity -> {
+                log.debug("Found invoice: {}", entity.getInvoiceNumber());
+                return mapper.toDomain(entity);
+            });
     }
 
     @Override
