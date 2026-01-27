@@ -46,8 +46,8 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: com.invoice.processing.domain.event
-        spring.json.value.default.type: com.invoice.processing.domain.event.IntegrationEvent
+        spring.json.trusted.packages: com.wpanther.invoice.processing.domain.event
+        spring.json.value.default.type: com.wpanther.invoice.processing.domain.event.IntegrationEvent
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -66,7 +66,7 @@ spring:
 app:
   kafka:
     topics:
-      invoice-received: invoice.received
+      document-received-invoice: document.received.invoice
       invoice-processed: invoice.processed
       pdf-generation-requested: pdf.generation.requested
       xml-signing-requested: xml.signing.requested
@@ -106,7 +106,7 @@ management:
 logging:
   level:
     root: INFO
-    com.invoice.processing: DEBUG
+    com.wpanther.invoice.processing: DEBUG
     org.springframework.kafka: INFO
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
