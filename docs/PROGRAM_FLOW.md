@@ -48,10 +48,10 @@ InvoiceProcessingServiceApplication.main()
 
 ## 2. Kafka Event Consumption
 
-When an `InvoiceReceivedEvent` arrives on the `invoice.received` topic:
+When an `InvoiceReceivedEvent` arrives on the `document.received.invoice` topic:
 
 ```
-Kafka Topic: invoice.received
+Kafka Topic: document.received.invoice
            │
            ▼
 ┌─────────────────────────────────────────┐
@@ -59,7 +59,7 @@ Kafka Topic: invoice.received
 │       (infrastructure/messaging)        │
 │                                         │
 │  @KafkaListener(                        │
-│    topics = "invoice.received",         │
+│    topics = "document.received.invoice",│
 │    groupId = "invoice-processing-srv"   │
 │  )                                      │
 │                                         │
@@ -95,11 +95,12 @@ InvoiceProcessingService.processInvoiceReceived(event)
 │                                         │
 │  parserService.parseInvoice(            │
 │    xmlContent,                          │
-│    sourceInvoiceId                      │
+│    documentId                           │
 │  )                                      │
 │                                         │
 │  Returns: ProcessedInvoice domain model │
-│  (Uses teda library - needs impl)       │
+│  (Uses teda library v1.0.0 -             │
+│   Invoice_CrossIndustryInvoice)         │
 └─────────────────────────────────────────┘
            │
            ▼
@@ -150,7 +151,7 @@ InvoiceProcessingService.processInvoiceReceived(event)
            │
            ▼
 ┌─────────────────────────────────────────┐
-│      Step 7: Request PDF Generation     │
+│      Step 7: Request XML Signing        │
 │                                         │
 │  invoice.requestPdfGeneration()         │
 │  invoiceRepository.save(invoice)        │
@@ -160,18 +161,18 @@ InvoiceProcessingService.processInvoiceReceived(event)
            │
            ▼
 ┌─────────────────────────────────────────┐
-│      Step 8: Publish PDF Request        │
+│      Step 8: Publish XML Signing Request│
 │                                         │
-│  eventPublisher.publishPdfGeneration    │
+│  eventPublisher.publishXmlSigning       │
 │                                         │
-│  PdfGenerationRequestedEvent contains:  │
+│  XmlSigningRequestedEvent contains:     │
 │  • invoiceId                            │
 │  • invoiceNumber                        │
 │  • originalXml                          │
 │  • invoiceDataJson                      │
 │  • correlationId                        │
 │                                         │
-│  → Kafka Topic: pdf.generation.requested│
+│  → Kafka Topic: xml.signing.requested  │
 └─────────────────────────────────────────┘
            │
            ▼
@@ -285,7 +286,7 @@ Offset committed  Message retained
   "occurredAt": "2024-01-01T12:00:00Z",
   "eventType": "invoice.received",
   "version": 1,
-  "invoiceId": "source-invoice-uuid",
+  "documentId": "source-document-uuid",
   "invoiceNumber": "INV-2024-001",
   "xmlContent": "<Invoice>...</Invoice>",
   "correlationId": "correlation-uuid"
@@ -308,13 +309,13 @@ Offset committed  Message retained
 }
 ```
 
-### PdfGenerationRequestedEvent (Published)
+### XmlSigningRequestedEvent (Published)
 
 ```json
 {
   "eventId": "uuid",
   "occurredAt": "2024-01-01T12:00:02Z",
-  "eventType": "pdf.generation.requested",
+  "eventType": "xml.signing.requested",
   "version": 1,
   "invoiceId": "processed-invoice-uuid",
   "invoiceNumber": "INV-2024-001",
@@ -351,7 +352,7 @@ Offset committed  Message retained
 │                 │ │                 │ │                 │
 │ Uses:           │ │ Uses:           │ │ Uses:           │
 │ • JpaRepository │ │ • teda library  │ │ • KafkaTemplate │
-│ • Mapper        │ │   (pending)     │ │                 │
+│ • Mapper        │ │   v1.0.0        │ │                 │
 └─────────────────┘ └─────────────────┘ └─────────────────┘
 ```
 
@@ -405,3 +406,22 @@ Note: Kafka sends are NOT part of the transaction.
 │  Callbacks log success/failure                               │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+## Version 1.0.0 Updates
+
+### Package Changes
+- Application package changed from `com.invoice.processing` to `com.wpanther.invoice.processing`
+- Maven groupId changed from `com.invoice` to `com.wpanther`
+
+### Kafka Topic Changes
+- Now consumes from `document.received.invoice` (was `invoice.received`)
+- Publishes to `xml.signing.requested` (was `pdf.generation.requested`)
+
+### Event Field Changes
+- `InvoiceReceivedEvent.documentId` (was `invoiceId`)
+- Maps to `sourceInvoiceId` in domain model
+
+### teda Library Changes
+- Uses teda v1.0.0
+- Root element: `Invoice_CrossIndustryInvoice` (was `TaxInvoice_CrossIndustryInvoice`)
+- JAXB packages: `com.wpanther.etax.generated.invoice.*` (was `taxinvoice.*`)

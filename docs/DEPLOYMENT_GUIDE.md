@@ -26,17 +26,18 @@ Before deploying, ensure the following external dependencies are available:
 2. **Apache Kafka**
    - Minimum version: 3.0+
    - Required topics:
-     - `invoice.received` (consumed)
+     - `document.received.invoice` (consumed)
      - `invoice.processed` (produced)
-     - `pdf.generation.requested` (produced)
+     - `xml.signing.requested` (produced)
 
 3. **Netflix Eureka** (Optional for local dev)
    - Service discovery and registration
    - Default URL: `http://localhost:8761/eureka/`
 
-4. **teda Library**
+4. **teda Library v1.0.0**
    - Must be installed in local Maven repository or artifact manager
    - Build command: `cd ../../../teda && mvn clean install`
+   - Version: 1.0.0 (uses `Invoice_CrossIndustryInvoice` namespace)
 
 ### Build Artifacts
 
@@ -199,7 +200,7 @@ services:
 
       # Logging
       LOGGING_LEVEL_ROOT: INFO
-      LOGGING_LEVEL_COM_INVOICE: DEBUG
+      LOGGING_LEVEL_COM_WPANTHER_INVOICE_PROCESSING: DEBUG
 
       # JVM options
       JAVA_OPTS: "-Xms512m -Xmx1024m"
@@ -999,7 +1000,7 @@ cat <<EOF | oc apply -f -
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
 metadata:
-  name: invoice.received
+  name: document.received.invoice
   namespace: kafka
   labels:
     strimzi.io/cluster: kafka
@@ -1024,7 +1025,7 @@ spec:
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
 metadata:
-  name: pdf.generation.requested
+  name: xml.signing.requested
   namespace: kafka
   labels:
     strimzi.io/cluster: kafka
@@ -1074,7 +1075,7 @@ spring:
 
 logging:
   level:
-    com.invoice: DEBUG
+    com.wpanther.invoice.processing: DEBUG
 ```
 
 #### Staging
@@ -1088,7 +1089,7 @@ spring:
 
 logging:
   level:
-    com.invoice: INFO
+    com.wpanther.invoice.processing: INFO
 ```
 
 #### Production
@@ -1106,7 +1107,7 @@ spring:
 logging:
   level:
     root: WARN
-    com.invoice: INFO
+    com.wpanther.invoice.processing: INFO
 
 management:
   endpoints:

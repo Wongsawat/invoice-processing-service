@@ -1,17 +1,17 @@
 # Invoice Processing Service
 
-Microservice for processing and enriching invoice data in the Invoice Processing System.
+Microservice for processing and enriching Thai e-Tax invoice data in the Invoice Processing System.
 
 ## Overview
 
 The Invoice Processing Service is responsible for:
 
-- **Receiving** validated invoices from the Invoice Intake Service
-- **Parsing** XML invoices using the teda library
+- **Receiving** validated invoices from the Document Intake Service via Kafka
+- **Parsing** XML invoices using the teda library v1.0.0
 - **Enriching** invoice data with business logic
 - **Calculating** totals, taxes, and other derived values
 - **Publishing** processed invoice events
-- **Requesting** PDF generation
+- **Requesting** XML signing for downstream services
 
 ## Architecture
 
@@ -34,6 +34,7 @@ This service follows DDD principles with:
 | Messaging | Apache Kafka |
 | Service Discovery | Netflix Eureka |
 | Database Migration | Flyway |
+| XML Parsing | teda Library v1.0.0 |
 
 ## Database Schema
 
@@ -49,14 +50,14 @@ This service follows DDD principles with:
 
 | Event | Topic | Description |
 |-------|-------|-------------|
-| `InvoiceReceivedEvent` | `invoice.received` | Invoice validated by intake service |
+| `InvoiceReceivedEvent` | `document.received.invoice` | Invoice validated by Document Intake Service |
 
 ### Published Events
 
 | Event | Topic | Description |
 |-------|-------|-------------|
 | `InvoiceProcessedEvent` | `invoice.processed` | Invoice processing completed |
-| `PdfGenerationRequestedEvent` | `pdf.generation.requested` | Request PDF generation |
+| `XmlSigningRequestedEvent` | `xml.signing.requested` | Request XML signing (XAdES) |
 
 ## Configuration
 
@@ -79,7 +80,7 @@ This service follows DDD principles with:
 1. PostgreSQL database running
 2. Kafka broker running
 3. Eureka server running (optional)
-4. Thai e-Tax Invoice library (teda) installed locally
+4. Thai e-Tax Invoice library (teda v1.0.0) installed locally
 
 ### Build
 
@@ -139,7 +140,7 @@ GET http://localhost:8082/actuator/prometheus
 ### Project Structure
 
 ```
-src/main/java/com/invoice/processing/
+src/main/java/com/wpanther/invoice/processing/
 ├── InvoiceProcessingServiceApplication.java
 ├── domain/
 │   ├── model/              # Domain models (aggregates, value objects)
@@ -181,13 +182,13 @@ mvn flyway:info
 
 ## Integration with teda Library
 
-This service uses the Thai e-Tax Invoice library (teda) for:
+This service uses the Thai e-Tax Invoice library (teda v1.0.0) for:
 
 - XML parsing and validation
 - JAXB class generation
 - Database-backed code lists
 
-**Note**: The `InvoiceParserService` implementation needs to be completed with actual teda library integration.
+The service expects XML documents with the `Invoice_CrossIndustryInvoice` root element (teda 1.0.0 namespace).
 
 ## Monitoring
 
@@ -195,13 +196,13 @@ This service uses the Thai e-Tax Invoice library (teda) for:
 
 The service exposes Prometheus metrics at `/actuator/prometheus`:
 
-- `invoice_processing_total` - Total invoices processed
-- `invoice_processing_duration_seconds` - Processing time
+- `kafka_consumer_fetch_manager_records_lag` - Consumer lag
+- `jvm_memory_used_bytes` - JVM memory usage
 - Custom business metrics
 
 ### Logging
 
-Structured JSON logging is configured for:
+Structured logging is configured for:
 
 - Application events
 - Kafka message processing
@@ -221,6 +222,55 @@ mvn test
 ```bash
 mvn verify
 ```
+
+## Event Flow
+
+```
+Document Intake Service
+        │
+        ▼
+   (document.received.invoice)
+        │
+        ▼
+┌─────────────────────────────┐
+│  Invoice Processing Service │
+│                             │
+│  1. Parse XML (teda 1.0.0)  │
+│  2. Validate                │
+│  3. Calculate totals        │
+│  4. Save to DB              │
+└──────────┬──────────────────┘
+           │
+           ▼
+    (invoice.processed)
+           │
+           ├──▶ Notification Service
+           │
+           ▼
+   (xml.signing.requested)
+           │
+           ▼
+    XML Signing Service
+```
+
+## Version 1.0.0 Changes
+
+### Package Rename
+- Changed from `com.invoice.processing` to `com.wpanther.invoice.processing`
+- Maven groupId changed from `com.invoice` to `com.wpanther`
+
+### Kafka Integration Update
+- Now consumes from `document.received.invoice` topic
+- `InvoiceReceivedEvent` uses `documentId` field instead of `invoiceId`
+
+### teda Library Upgrade
+- Upgraded from 1.0.0-SNAPSHOT to 1.0.0
+- Root element: `Invoice_CrossIndustryInvoice` (was `TaxInvoice_CrossIndustryInvoice`)
+- JAXB packages: `com.wpanther.etax.generated.invoice.*` (was `taxinvoice.*`)
+
+### Event Flow Update
+- Service now publishes `XmlSigningRequestedEvent` instead of `PdfGenerationRequestedEvent`
+- XML Signing Service handles XAdES signatures before PDF generation
 
 ## License
 
