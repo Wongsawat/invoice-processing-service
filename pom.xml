@@ -5,7 +5,7 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.invoice</groupId>
+    <groupId>com.wpanther</groupId>
     <artifactId>invoice-processing-service</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
@@ -21,7 +21,7 @@
 
         <spring-boot.version>3.2.5</spring-boot.version>
         <spring-cloud.version>2023.0.1</spring-cloud.version>
-        <teda.version>1.0.0-SNAPSHOT</teda.version>
+        <teda.version>1.0.0</teda.version>
         <lombok.version>1.18.30</lombok.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <flyway.version>10.10.0</flyway.version>
