@@ -1,24 +1,20 @@
 package com.wpanther.invoice.processing.infrastructure.messaging;
 
-import com.wpanther.invoice.processing.domain.event.IntegrationEvent;
 import com.wpanther.invoice.processing.domain.event.InvoiceProcessedEvent;
 import com.wpanther.invoice.processing.domain.event.PdfGenerationRequestedEvent;
+import com.wpanther.invoice.processing.domain.event.XmlSigningRequestedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.apache.camel.ProducerTemplate;
 
 import java.math.BigDecimal;
-import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -28,23 +24,13 @@ import static org.mockito.Mockito.*;
 class EventPublisherTest {
 
     @Mock
-    private KafkaTemplate<String, IntegrationEvent> kafkaTemplate;
-
-    @Mock
-    private SendResult<String, IntegrationEvent> sendResult;
+    private ProducerTemplate producerTemplate;
 
     private EventPublisher eventPublisher;
 
-    private static final String INVOICE_PROCESSED_TOPIC = "invoice.processed";
-    private static final String PDF_GENERATION_REQUESTED_TOPIC = "pdf.generation.requested";
-
     @BeforeEach
     void setUp() {
-        eventPublisher = new EventPublisher(kafkaTemplate);
-
-        // Set topic values using reflection
-        ReflectionTestUtils.setField(eventPublisher, "invoiceProcessedTopic", INVOICE_PROCESSED_TOPIC);
-        ReflectionTestUtils.setField(eventPublisher, "pdfGenerationRequestedTopic", PDF_GENERATION_REQUESTED_TOPIC);
+        eventPublisher = new EventPublisher(producerTemplate);
     }
 
     @Test
@@ -58,22 +44,26 @@ class EventPublisherTest {
             "correlation-123"
         );
 
-        CompletableFuture<SendResult<String, IntegrationEvent>> future = CompletableFuture.completedFuture(sendResult);
-        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(future);
-
         // When
         eventPublisher.publishInvoiceProcessed(event);
 
         // Then
-        ArgumentCaptor<String> topicCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<IntegrationEvent> eventCaptor = ArgumentCaptor.forClass(IntegrationEvent.class);
+        ArgumentCaptor<String> endpointCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+        ArgumentCaptor<String> headerNameCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object> headerValueCaptor = ArgumentCaptor.forClass(Object.class);
 
-        verify(kafkaTemplate).send(topicCaptor.capture(), keyCaptor.capture(), eventCaptor.capture());
+        verify(producerTemplate).sendBodyAndHeader(
+            endpointCaptor.capture(),
+            bodyCaptor.capture(),
+            headerNameCaptor.capture(),
+            headerValueCaptor.capture()
+        );
 
-        assertEquals(INVOICE_PROCESSED_TOPIC, topicCaptor.getValue());
-        assertEquals("invoice-123", keyCaptor.getValue());
-        assertEquals(event, eventCaptor.getValue());
+        assertEquals("direct:publish-invoice-processed", endpointCaptor.getValue());
+        assertEquals(event, bodyCaptor.getValue());
+        assertEquals("kafka.KEY", headerNameCaptor.getValue());
+        assertEquals("invoice-123", headerValueCaptor.getValue());
     }
 
     @Test
@@ -87,16 +77,18 @@ class EventPublisherTest {
             "correlation-123"
         );
 
-        CompletableFuture<SendResult<String, IntegrationEvent>> future = new CompletableFuture<>();
-        future.completeExceptionally(new RuntimeException("Kafka error"));
-        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(future);
+        doThrow(new RuntimeException("Camel error")).when(producerTemplate)
+            .sendBodyAndHeader(anyString(), any(), anyString(), any());
 
-        // When
-        eventPublisher.publishInvoiceProcessed(event);
+        // When/Then
+        assertThrows(RuntimeException.class, () -> eventPublisher.publishInvoiceProcessed(event));
 
-        // Then
-        verify(kafkaTemplate).send(eq(INVOICE_PROCESSED_TOPIC), eq("invoice-123"), eq(event));
-        // The error is logged but not thrown
+        verify(producerTemplate).sendBodyAndHeader(
+            eq("direct:publish-invoice-processed"),
+            eq(event),
+            eq("kafka.KEY"),
+            eq("invoice-123")
+        );
     }
 
     @Test
@@ -110,22 +102,26 @@ class EventPublisherTest {
             "correlation-123"
         );
 
-        CompletableFuture<SendResult<String, IntegrationEvent>> future = CompletableFuture.completedFuture(sendResult);
-        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(future);
-
         // When
         eventPublisher.publishPdfGenerationRequested(event);
 
         // Then
-        ArgumentCaptor<String> topicCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<IntegrationEvent> eventCaptor = ArgumentCaptor.forClass(IntegrationEvent.class);
+        ArgumentCaptor<String> endpointCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+        ArgumentCaptor<String> headerNameCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object> headerValueCaptor = ArgumentCaptor.forClass(Object.class);
 
-        verify(kafkaTemplate).send(topicCaptor.capture(), keyCaptor.capture(), eventCaptor.capture());
+        verify(producerTemplate).sendBodyAndHeader(
+            endpointCaptor.capture(),
+            bodyCaptor.capture(),
+            headerNameCaptor.capture(),
+            headerValueCaptor.capture()
+        );
 
-        assertEquals(PDF_GENERATION_REQUESTED_TOPIC, topicCaptor.getValue());
-        assertEquals("invoice-123", keyCaptor.getValue());
-        assertEquals(event, eventCaptor.getValue());
+        assertEquals("direct:publish-pdf-generation-requested", endpointCaptor.getValue());
+        assertEquals(event, bodyCaptor.getValue());
+        assertEquals("kafka.KEY", headerNameCaptor.getValue());
+        assertEquals("invoice-123", headerValueCaptor.getValue());
     }
 
     @Test
@@ -139,16 +135,76 @@ class EventPublisherTest {
             "correlation-123"
         );
 
-        CompletableFuture<SendResult<String, IntegrationEvent>> future = new CompletableFuture<>();
-        future.completeExceptionally(new RuntimeException("Kafka error"));
-        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(future);
+        doThrow(new RuntimeException("Camel error")).when(producerTemplate)
+            .sendBodyAndHeader(anyString(), any(), anyString(), any());
+
+        // When/Then
+        assertThrows(RuntimeException.class, () -> eventPublisher.publishPdfGenerationRequested(event));
+
+        verify(producerTemplate).sendBodyAndHeader(
+            eq("direct:publish-pdf-generation-requested"),
+            eq(event),
+            eq("kafka.KEY"),
+            eq("invoice-123")
+        );
+    }
+
+    @Test
+    void testPublishXmlSigningRequestedSuccess() {
+        // Given
+        XmlSigningRequestedEvent event = new XmlSigningRequestedEvent(
+            "invoice-123",
+            "INV-001",
+            "<xml>content</xml>",
+            "{\"data\":\"json\"}",
+            "correlation-123"
+        );
 
         // When
-        eventPublisher.publishPdfGenerationRequested(event);
+        eventPublisher.publishXmlSigningRequested(event);
 
         // Then
-        verify(kafkaTemplate).send(eq(PDF_GENERATION_REQUESTED_TOPIC), eq("invoice-123"), eq(event));
-        // The error is logged but not thrown
+        ArgumentCaptor<String> endpointCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+        ArgumentCaptor<String> headerNameCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object> headerValueCaptor = ArgumentCaptor.forClass(Object.class);
+
+        verify(producerTemplate).sendBodyAndHeader(
+            endpointCaptor.capture(),
+            bodyCaptor.capture(),
+            headerNameCaptor.capture(),
+            headerValueCaptor.capture()
+        );
+
+        assertEquals("direct:publish-xml-signing-requested", endpointCaptor.getValue());
+        assertEquals(event, bodyCaptor.getValue());
+        assertEquals("kafka.KEY", headerNameCaptor.getValue());
+        assertEquals("invoice-123", headerValueCaptor.getValue());
+    }
+
+    @Test
+    void testPublishXmlSigningRequestedFailure() {
+        // Given
+        XmlSigningRequestedEvent event = new XmlSigningRequestedEvent(
+            "invoice-123",
+            "INV-001",
+            "<xml>content</xml>",
+            "{\"data\":\"json\"}",
+            "correlation-123"
+        );
+
+        doThrow(new RuntimeException("Camel error")).when(producerTemplate)
+            .sendBodyAndHeader(anyString(), any(), anyString(), any());
+
+        // When/Then
+        assertThrows(RuntimeException.class, () -> eventPublisher.publishXmlSigningRequested(event));
+
+        verify(producerTemplate).sendBodyAndHeader(
+            eq("direct:publish-xml-signing-requested"),
+            eq(event),
+            eq("kafka.KEY"),
+            eq("invoice-123")
+        );
     }
 
     @Test
@@ -162,14 +218,16 @@ class EventPublisherTest {
             "correlation-456"
         );
 
-        CompletableFuture<SendResult<String, IntegrationEvent>> future = CompletableFuture.completedFuture(sendResult);
-        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(future);
-
         // When
         eventPublisher.publishInvoiceProcessed(event);
 
         // Then
-        verify(kafkaTemplate).send(eq(INVOICE_PROCESSED_TOPIC), eq("invoice-456"), eq(event));
+        verify(producerTemplate).sendBodyAndHeader(
+            eq("direct:publish-invoice-processed"),
+            eq(event),
+            eq("kafka.KEY"),
+            eq("invoice-456")
+        );
     }
 
     @Test
@@ -183,14 +241,39 @@ class EventPublisherTest {
             "correlation-789"
         );
 
-        CompletableFuture<SendResult<String, IntegrationEvent>> future = CompletableFuture.completedFuture(sendResult);
-        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(future);
-
         // When
         eventPublisher.publishPdfGenerationRequested(event);
 
         // Then
-        verify(kafkaTemplate).send(eq(PDF_GENERATION_REQUESTED_TOPIC), eq("invoice-789"), eq(event));
+        verify(producerTemplate).sendBodyAndHeader(
+            eq("direct:publish-pdf-generation-requested"),
+            eq(event),
+            eq("kafka.KEY"),
+            eq("invoice-789")
+        );
+    }
+
+    @Test
+    void testPublishXmlSigningRequestedWithCorrectKey() {
+        // Given
+        XmlSigningRequestedEvent event = new XmlSigningRequestedEvent(
+            "invoice-999",
+            "INV-004",
+            "<xml>content</xml>",
+            "{}",
+            "correlation-999"
+        );
+
+        // When
+        eventPublisher.publishXmlSigningRequested(event);
+
+        // Then
+        verify(producerTemplate).sendBodyAndHeader(
+            eq("direct:publish-xml-signing-requested"),
+            eq(event),
+            eq("kafka.KEY"),
+            eq("invoice-999")
+        );
     }
 
     @Test
@@ -203,15 +286,17 @@ class EventPublisherTest {
             "invoice-2", "INV-2", new BigDecimal("200.00"), "THB", "corr-2"
         );
 
-        CompletableFuture<SendResult<String, IntegrationEvent>> future = CompletableFuture.completedFuture(sendResult);
-        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(future);
-
         // When
         eventPublisher.publishInvoiceProcessed(event1);
         eventPublisher.publishInvoiceProcessed(event2);
 
         // Then
-        verify(kafkaTemplate, times(2)).send(anyString(), anyString(), any());
+        verify(producerTemplate, times(2)).sendBodyAndHeader(
+            eq("direct:publish-invoice-processed"),
+            any(),
+            eq("kafka.KEY"),
+            any()
+        );
     }
 
     @Test
@@ -224,14 +309,39 @@ class EventPublisherTest {
             "invoice-2", "INV-2", "<xml>2</xml>", "{}", "corr-2"
         );
 
-        CompletableFuture<SendResult<String, IntegrationEvent>> future = CompletableFuture.completedFuture(sendResult);
-        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(future);
-
         // When
         eventPublisher.publishPdfGenerationRequested(event1);
         eventPublisher.publishPdfGenerationRequested(event2);
 
         // Then
-        verify(kafkaTemplate, times(2)).send(anyString(), anyString(), any());
+        verify(producerTemplate, times(2)).sendBodyAndHeader(
+            eq("direct:publish-pdf-generation-requested"),
+            any(),
+            eq("kafka.KEY"),
+            any()
+        );
+    }
+
+    @Test
+    void testMultiplePublishXmlSigningRequestedCalls() {
+        // Given
+        XmlSigningRequestedEvent event1 = new XmlSigningRequestedEvent(
+            "invoice-1", "INV-1", "<xml>1</xml>", "{}", "corr-1"
+        );
+        XmlSigningRequestedEvent event2 = new XmlSigningRequestedEvent(
+            "invoice-2", "INV-2", "<xml>2</xml>", "{}", "corr-2"
+        );
+
+        // When
+        eventPublisher.publishXmlSigningRequested(event1);
+        eventPublisher.publishXmlSigningRequested(event2);
+
+        // Then
+        verify(producerTemplate, times(2)).sendBodyAndHeader(
+            eq("direct:publish-xml-signing-requested"),
+            any(),
+            eq("kafka.KEY"),
+            any()
+        );
     }
 }

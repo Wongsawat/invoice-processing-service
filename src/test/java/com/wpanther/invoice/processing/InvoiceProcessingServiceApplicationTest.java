@@ -31,7 +31,9 @@ class InvoiceProcessingServiceApplicationTest {
             "Should have InvoiceProcessingService bean");
         assertTrue(applicationContext.containsBean("eventPublisher"),
             "Should have EventPublisher bean");
-        assertTrue(applicationContext.containsBean("invoiceEventListener"),
-            "Should have InvoiceEventListener bean");
+        assertTrue(applicationContext.containsBean("invoiceRouteConfig"),
+            "Should have InvoiceRouteConfig bean");
+        assertTrue(applicationContext.containsBean("producerTemplate"),
+            "Should have ProducerTemplate bean");
     }
 }

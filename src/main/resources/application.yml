@@ -37,39 +37,28 @@ spring:
     locations: classpath:db/migration
     validate-on-migrate: true
 
-  kafka:
-    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
-    consumer:
-      group-id: invoice-processing-service
-      auto-offset-reset: earliest
-      enable-auto-commit: false
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: com.wpanther.invoice.processing.domain.event
-        spring.json.value.default.type: com.wpanther.invoice.processing.domain.event.IntegrationEvent
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      acks: all
-      retries: 3
-      properties:
-        enable.idempotence: true
-
   jackson:
     serialization:
       write-dates-as-timestamps: false
     deserialization:
       fail-on-unknown-properties: false
 
+# Apache Camel configuration
+camel:
+  springboot:
+    name: invoice-processing-camel
+    main-run-controller: true
+
 # Application-specific configuration
 app:
   kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
     topics:
       document-received-invoice: document.received.invoice
       invoice-processed: invoice.processed
       pdf-generation-requested: pdf.generation.requested
       xml-signing-requested: xml.signing.requested
+      dlq: invoice.processing.dlq
 
 # Eureka client configuration
 eureka:
@@ -90,7 +79,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus,camelroutes
   endpoint:
     health:
       show-details: always
@@ -107,7 +96,8 @@ logging:
   level:
     root: INFO
     com.wpanther.invoice.processing: DEBUG
-    org.springframework.kafka: INFO
+    org.apache.camel: INFO
+    org.apache.camel.component.kafka: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
   pattern:

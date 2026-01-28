@@ -14,23 +14,27 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
         format_sql: true
 
-  kafka:
-    bootstrap-servers: localhost:9092
-    consumer:
-      group-id: test-group
-      enable-auto-commit: false
-
   flyway:
     enabled: false
 
+# Apache Camel configuration
+camel:
+  springboot:
+    name: invoice-processing-camel-test
+    main-run-controller: false
+
 app:
   kafka:
+    bootstrap-servers: localhost:9092
     topics:
       document-received-invoice: document.received.invoice.test
       invoice-processed: invoice.processed.test
       pdf-generation-requested: pdf.generation.requested.test
+      xml-signing-requested: xml.signing.requested.test
+      dlq: invoice.processing.dlq.test
 
 logging:
   level:
     root: WARN
     com.wpanther.invoice.processing: INFO
+    org.apache.camel: INFO

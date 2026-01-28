@@ -3,7 +3,6 @@ package com.wpanther.invoice.processing;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
-import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 /**
@@ -13,7 +12,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  * calculates totals, and requests PDF generation.
  *
  * Key Features:
- * - Consumes InvoiceReceivedEvent from Kafka
+ * - Consumes InvoiceReceivedEvent from Kafka via Apache Camel
  * - Parses XML invoices using teda library
  * - Applies business logic and calculations
  * - Publishes InvoiceProcessedEvent
@@ -23,7 +22,6 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  * @version 1.0.0
  */
 @SpringBootApplication
-@EnableKafka
 @EnableDiscoveryClient
 @EnableTransactionManagement
 public class InvoiceProcessingServiceApplication {
