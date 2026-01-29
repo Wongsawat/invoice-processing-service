@@ -416,6 +416,7 @@ Note: Kafka sends are NOT part of the transaction.
 ### Kafka Topic Changes
 - Now consumes from `document.received.invoice` (was `invoice.received`)
 - Publishes to `xml.signing.requested` (was `pdf.generation.requested`)
+- PDF generation is now triggered by XML Signing Service after signing
 
 ### Event Field Changes
 - `InvoiceReceivedEvent.documentId` (was `invoiceId`)

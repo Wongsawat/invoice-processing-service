@@ -30,9 +30,6 @@ public class InvoiceRouteConfig extends RouteBuilder {
     @Value("${app.kafka.topics.xml-signing-requested}")
     private String xmlSigningRequestedTopic;
 
-    @Value("${app.kafka.topics.pdf-generation-requested}")
-    private String pdfGenerationRequestedTopic;
-
     @Value("${app.kafka.topics.dlq:invoice.processing.dlq}")
     private String dlqTopic;
 
@@ -104,17 +101,5 @@ public class InvoiceRouteConfig extends RouteBuilder {
                 + "?brokers=" + kafkaBrokers
                 + "&key=${header.kafka.KEY}")
             .log("Published XmlSigningRequestedEvent to " + xmlSigningRequestedTopic);
-
-        // ============================================================
-        // PRODUCER ROUTE: pdf.generation.requested
-        // ============================================================
-        from("direct:publish-pdf-generation-requested")
-            .routeId("pdf-generation-requested-producer")
-            .log("Publishing PdfGenerationRequestedEvent: ${body.invoiceNumber}")
-            .marshal().json(JsonLibrary.Jackson)
-            .to("kafka:" + pdfGenerationRequestedTopic
-                + "?brokers=" + kafkaBrokers
-                + "&key=${header.kafka.KEY}")
-            .log("Published PdfGenerationRequestedEvent to " + pdfGenerationRequestedTopic);
     }
 }

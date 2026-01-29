@@ -269,8 +269,9 @@ Document Intake Service
 - JAXB packages: `com.wpanther.etax.generated.invoice.*` (was `taxinvoice.*`)
 
 ### Event Flow Update
-- Service now publishes `XmlSigningRequestedEvent` instead of `PdfGenerationRequestedEvent`
+- Service now publishes `XmlSigningRequestedEvent` (removed `PdfGenerationRequestedEvent`)
 - XML Signing Service handles XAdES signatures before PDF generation
+- Correct flow: Invoice Processing → XML Signing → PDF Generation (via xml.signed topic)
 
 ## License
 

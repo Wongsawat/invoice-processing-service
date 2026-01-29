@@ -29,7 +29,6 @@ app:
     topics:
       document-received-invoice: document.received.invoice.test
       invoice-processed: invoice.processed.test
-      pdf-generation-requested: pdf.generation.requested.test
       xml-signing-requested: xml.signing.requested.test
       dlq: invoice.processing.dlq.test
 

@@ -1,7 +1,6 @@
 package com.wpanther.invoice.processing.infrastructure.messaging;
 
 import com.wpanther.invoice.processing.domain.event.InvoiceProcessedEvent;
-import com.wpanther.invoice.processing.domain.event.PdfGenerationRequestedEvent;
 import com.wpanther.invoice.processing.domain.event.XmlSigningRequestedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -92,64 +91,6 @@ class EventPublisherTest {
     }
 
     @Test
-    void testPublishPdfGenerationRequestedSuccess() {
-        // Given
-        PdfGenerationRequestedEvent event = new PdfGenerationRequestedEvent(
-            "invoice-123",
-            "INV-001",
-            "<xml>content</xml>",
-            "{\"data\":\"json\"}",
-            "correlation-123"
-        );
-
-        // When
-        eventPublisher.publishPdfGenerationRequested(event);
-
-        // Then
-        ArgumentCaptor<String> endpointCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
-        ArgumentCaptor<String> headerNameCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<Object> headerValueCaptor = ArgumentCaptor.forClass(Object.class);
-
-        verify(producerTemplate).sendBodyAndHeader(
-            endpointCaptor.capture(),
-            bodyCaptor.capture(),
-            headerNameCaptor.capture(),
-            headerValueCaptor.capture()
-        );
-
-        assertEquals("direct:publish-pdf-generation-requested", endpointCaptor.getValue());
-        assertEquals(event, bodyCaptor.getValue());
-        assertEquals("kafka.KEY", headerNameCaptor.getValue());
-        assertEquals("invoice-123", headerValueCaptor.getValue());
-    }
-
-    @Test
-    void testPublishPdfGenerationRequestedFailure() {
-        // Given
-        PdfGenerationRequestedEvent event = new PdfGenerationRequestedEvent(
-            "invoice-123",
-            "INV-001",
-            "<xml>content</xml>",
-            "{\"data\":\"json\"}",
-            "correlation-123"
-        );
-
-        doThrow(new RuntimeException("Camel error")).when(producerTemplate)
-            .sendBodyAndHeader(anyString(), any(), anyString(), any());
-
-        // When/Then
-        assertThrows(RuntimeException.class, () -> eventPublisher.publishPdfGenerationRequested(event));
-
-        verify(producerTemplate).sendBodyAndHeader(
-            eq("direct:publish-pdf-generation-requested"),
-            eq(event),
-            eq("kafka.KEY"),
-            eq("invoice-123")
-        );
-    }
-
-    @Test
     void testPublishXmlSigningRequestedSuccess() {
         // Given
         XmlSigningRequestedEvent event = new XmlSigningRequestedEvent(
@@ -231,29 +172,6 @@ class EventPublisherTest {
     }
 
     @Test
-    void testPublishPdfGenerationRequestedWithCorrectKey() {
-        // Given
-        PdfGenerationRequestedEvent event = new PdfGenerationRequestedEvent(
-            "invoice-789",
-            "INV-003",
-            "<xml>content</xml>",
-            "{}",
-            "correlation-789"
-        );
-
-        // When
-        eventPublisher.publishPdfGenerationRequested(event);
-
-        // Then
-        verify(producerTemplate).sendBodyAndHeader(
-            eq("direct:publish-pdf-generation-requested"),
-            eq(event),
-            eq("kafka.KEY"),
-            eq("invoice-789")
-        );
-    }
-
-    @Test
     void testPublishXmlSigningRequestedWithCorrectKey() {
         // Given
         XmlSigningRequestedEvent event = new XmlSigningRequestedEvent(
@@ -293,29 +211,6 @@ class EventPublisherTest {
         // Then
         verify(producerTemplate, times(2)).sendBodyAndHeader(
             eq("direct:publish-invoice-processed"),
-            any(),
-            eq("kafka.KEY"),
-            any()
-        );
-    }
-
-    @Test
-    void testMultiplePublishPdfGenerationRequestedCalls() {
-        // Given
-        PdfGenerationRequestedEvent event1 = new PdfGenerationRequestedEvent(
-            "invoice-1", "INV-1", "<xml>1</xml>", "{}", "corr-1"
-        );
-        PdfGenerationRequestedEvent event2 = new PdfGenerationRequestedEvent(
-            "invoice-2", "INV-2", "<xml>2</xml>", "{}", "corr-2"
-        );
-
-        // When
-        eventPublisher.publishPdfGenerationRequested(event1);
-        eventPublisher.publishPdfGenerationRequested(event2);
-
-        // Then
-        verify(producerTemplate, times(2)).sendBodyAndHeader(
-            eq("direct:publish-pdf-generation-requested"),
             any(),
             eq("kafka.KEY"),
             any()

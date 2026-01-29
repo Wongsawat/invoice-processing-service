@@ -114,7 +114,7 @@ The **Invoice Processing Service** has been successfully implemented as a comple
 
 #### 11. **Test Coverage**
 
-- 247 tests (100% passing)
+- 220+ tests (100% passing)
 - Unit tests for domain logic
 - Integration tests with Testcontainers
 - Repository tests with H2
@@ -127,7 +127,7 @@ The **Invoice Processing Service** has been successfully implemented as a comple
 | **Java Classes** | 27 |
 | **Domain Models** | 7 |
 | **JPA Entities** | 3 |
-| **Events** | 4 |
+| **Events** | 3 |
 | **Services** | 3 |
 | **Repositories** | 3 |
 | **Database Tables** | 3 |
@@ -169,8 +169,7 @@ invoice-processing-service/
     │   │       ├── IntegrationEvent.java      # Base event
     │   │       ├── InvoiceReceivedEvent.java  # Contains documentId
     │   │       ├── InvoiceProcessedEvent.java
-    │   │       ├── XmlSigningRequestedEvent.java
-    │   │       └── PdfGenerationRequestedEvent.java
+    │   │       └── XmlSigningRequestedEvent.java
     │   │
     │   ├── application/                       # Application Layer
     │   │   └── service/
@@ -380,7 +379,7 @@ This implementation follows the design specifications from:
 - ✅ Database persistence with Flyway migrations
 - ✅ Service discovery with Eureka
 - ✅ Docker support
-- ✅ Comprehensive test coverage (247 tests, 90% coverage)
+- ✅ Comprehensive test coverage (220+ tests, 90% coverage)
 
 ## Known Limitations
 
@@ -397,7 +396,7 @@ The **Invoice Processing Service** is a **production-ready microservice** with:
 ✅ Database persistence with Flyway migrations
 ✅ Service discovery with Eureka
 ✅ Docker support
-✅ Comprehensive test coverage (247 tests)
+✅ Comprehensive test coverage (220+ tests)
 ✅ Full teda 1.0.0 integration
 ✅ XML signing workflow integration
 

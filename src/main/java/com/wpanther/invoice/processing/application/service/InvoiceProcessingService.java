@@ -3,7 +3,6 @@ package com.wpanther.invoice.processing.application.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.invoice.processing.domain.event.InvoiceProcessedEvent;
 import com.wpanther.invoice.processing.domain.event.InvoiceReceivedEvent;
-import com.wpanther.invoice.processing.domain.event.PdfGenerationRequestedEvent;
 import com.wpanther.invoice.processing.domain.event.XmlSigningRequestedEvent;
 import com.wpanther.invoice.processing.domain.model.InvoiceId;
 import com.wpanther.invoice.processing.domain.model.ProcessedInvoice;
