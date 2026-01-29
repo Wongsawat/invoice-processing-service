@@ -30,14 +30,18 @@ public class XmlSigningRequestedEvent extends IntegrationEvent {
     @JsonProperty("correlationId")
     private final String correlationId;
 
+    @JsonProperty("documentType")
+    private final String documentType;
+
     public XmlSigningRequestedEvent(String invoiceId, String invoiceNumber, String xmlContent,
-                                    String invoiceDataJson, String correlationId) {
+                                    String invoiceDataJson, String correlationId, String documentType) {
         super(EVENT_TYPE);
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.xmlContent = xmlContent;
         this.invoiceDataJson = invoiceDataJson;
         this.correlationId = correlationId;
+        this.documentType = documentType;
     }
 
     @JsonCreator
@@ -50,7 +54,8 @@ public class XmlSigningRequestedEvent extends IntegrationEvent {
         @JsonProperty("invoiceNumber") String invoiceNumber,
         @JsonProperty("xmlContent") String xmlContent,
         @JsonProperty("invoiceDataJson") String invoiceDataJson,
-        @JsonProperty("correlationId") String correlationId
+        @JsonProperty("correlationId") String correlationId,
+        @JsonProperty("documentType") String documentType
     ) {
         super(eventId, occurredAt, eventType, version);
         this.invoiceId = invoiceId;
@@ -58,5 +63,6 @@ public class XmlSigningRequestedEvent extends IntegrationEvent {
         this.xmlContent = xmlContent;
         this.invoiceDataJson = invoiceDataJson;
         this.correlationId = correlationId;
+        this.documentType = documentType;
     }
 }

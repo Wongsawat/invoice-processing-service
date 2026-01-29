@@ -88,7 +88,8 @@ public class InvoiceProcessingService {
                 saved.getInvoiceNumber(),
                 saved.getOriginalXml(),
                 invoiceDataJson,
-                event.getCorrelationId()
+                event.getCorrelationId(),
+                "INVOICE"
             );
             eventPublisher.publishXmlSigningRequested(xmlSigningEvent);
 

@@ -98,7 +98,8 @@ class EventPublisherTest {
             "INV-001",
             "<xml>content</xml>",
             "{\"data\":\"json\"}",
-            "correlation-123"
+            "correlation-123",
+            "INVOICE"
         );
 
         // When
@@ -131,7 +132,8 @@ class EventPublisherTest {
             "INV-001",
             "<xml>content</xml>",
             "{\"data\":\"json\"}",
-            "correlation-123"
+            "correlation-123",
+            "INVOICE"
         );
 
         doThrow(new RuntimeException("Camel error")).when(producerTemplate)
@@ -179,7 +181,8 @@ class EventPublisherTest {
             "INV-004",
             "<xml>content</xml>",
             "{}",
-            "correlation-999"
+            "correlation-999",
+            "INVOICE"
         );
 
         // When
@@ -221,10 +224,10 @@ class EventPublisherTest {
     void testMultiplePublishXmlSigningRequestedCalls() {
         // Given
         XmlSigningRequestedEvent event1 = new XmlSigningRequestedEvent(
-            "invoice-1", "INV-1", "<xml>1</xml>", "{}", "corr-1"
+            "invoice-1", "INV-1", "<xml>1</xml>", "{}", "corr-1", "INVOICE"
         );
         XmlSigningRequestedEvent event2 = new XmlSigningRequestedEvent(
-            "invoice-2", "INV-2", "<xml>2</xml>", "{}", "corr-2"
+            "invoice-2", "INV-2", "<xml>2</xml>", "{}", "corr-2", "INVOICE"
         );
 
         // When
