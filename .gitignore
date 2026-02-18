@@ -14,5 +14,15 @@ buildNumber.properties
 .idea/
 *.iml
 
+# IDE - Eclipse / VS Code
+.classpath
+.factorypath
+.project
+.settings/
+.vscode/
+
+# Agents
+AGENTS.md
+
 # Claude Code
 CLAUDE.md

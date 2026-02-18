@@ -1,57 +1,54 @@
 package com.wpanther.invoice.processing.infrastructure.messaging;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.invoice.processing.domain.event.InvoiceProcessedEvent;
-import com.wpanther.invoice.processing.domain.event.XmlSigningRequestedEvent;
+import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.camel.ProducerTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Map;
 
 /**
- * Publisher for integration events using Apache Camel.
+ * Publisher for integration events using outbox pattern.
+ * Events are written to outbox table within same transaction as domain changes.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class EventPublisher {
 
-    private final ProducerTemplate producerTemplate;
+    private final OutboxService outboxService;
+    private final ObjectMapper objectMapper;
 
-    /**
-     * Publish invoice processed event
-     */
+    @Transactional(propagation = Propagation.MANDATORY)
     public void publishInvoiceProcessed(InvoiceProcessedEvent event) {
-        log.info("Publishing invoice processed event for invoice: {}", event.getInvoiceNumber());
-        try {
-            producerTemplate.sendBodyAndHeader(
-                "direct:publish-invoice-processed",
-                event,
-                "kafka.KEY",
-                event.getInvoiceId()
-            );
-            log.info("Successfully published invoice processed event: {}", event.getInvoiceNumber());
-        } catch (Exception e) {
-            log.error("Failed to publish invoice processed event: {}", event.getInvoiceNumber(), e);
-            throw e;
-        }
+        Map<String, String> headers = Map.of(
+            "correlationId", event.getCorrelationId(),
+            "invoiceNumber", event.getInvoiceNumber()
+        );
+
+        outboxService.saveWithRouting(
+            event,
+            "ProcessedInvoice",
+            event.getInvoiceId(),
+            "invoice.processed",
+            event.getInvoiceId(),
+            toJson(headers)
+        );
+
+        log.info("Published InvoiceProcessedEvent to outbox: {}", event.getInvoiceNumber());
     }
 
-    /**
-     * Publish XML signing requested event
-     */
-    public void publishXmlSigningRequested(XmlSigningRequestedEvent event) {
-        log.info("Publishing XML signing request for invoice: {}", event.getInvoiceNumber());
+    private String toJson(Map<String, String> map) {
         try {
-            producerTemplate.sendBodyAndHeader(
-                "direct:publish-xml-signing-requested",
-                event,
-                "kafka.KEY",
-                event.getInvoiceId()
-            );
-            log.info("Successfully published XML signing request: {}", event.getInvoiceNumber());
-        } catch (Exception e) {
-            log.error("Failed to publish XML signing request: {}", event.getInvoiceNumber(), e);
-            throw e;
+            return objectMapper.writeValueAsString(map);
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to serialize headers to JSON", e);
+            return null;
         }
     }
 }

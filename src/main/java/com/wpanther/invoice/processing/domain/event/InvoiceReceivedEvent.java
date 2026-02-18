@@ -2,6 +2,7 @@ package com.wpanther.invoice.processing.domain.event;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.wpanther.saga.domain.model.IntegrationEvent;
 import lombok.Getter;
 
 import java.time.Instant;
@@ -26,14 +27,6 @@ public class InvoiceReceivedEvent extends IntegrationEvent {
 
     @JsonProperty("correlationId")
     private final String correlationId;
-
-    public InvoiceReceivedEvent(String documentId, String invoiceNumber, String xmlContent, String correlationId) {
-        super(EVENT_TYPE);
-        this.documentId = documentId;
-        this.invoiceNumber = invoiceNumber;
-        this.xmlContent = xmlContent;
-        this.correlationId = correlationId;
-    }
 
     @JsonCreator
     public InvoiceReceivedEvent(

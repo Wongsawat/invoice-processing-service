@@ -1,7 +1,8 @@
 package com.wpanther.invoice.processing.infrastructure.config;
 
-import com.wpanther.invoice.processing.application.service.InvoiceProcessingService;
-import com.wpanther.invoice.processing.domain.event.InvoiceReceivedEvent;
+import com.wpanther.invoice.processing.application.service.SagaCommandHandler;
+import com.wpanther.invoice.processing.domain.event.CompensateInvoiceCommand;
+import com.wpanther.invoice.processing.domain.event.ProcessInvoiceCommand;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.dataformat.JsonLibrary;
@@ -9,32 +10,29 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Apache Camel routes for invoice processing.
- * Replaces Spring Kafka consumer and producer configuration.
+ * Apache Camel routes for saga command and compensation consumers.
+ * Replaces old InvoiceRouteConfig that consumed from document.received.invoice.
  */
 @Component
 @Slf4j
 public class InvoiceRouteConfig extends RouteBuilder {
 
-    private final InvoiceProcessingService processingService;
+    private final SagaCommandHandler sagaCommandHandler;
 
     @Value("${app.kafka.bootstrap-servers}")
     private String kafkaBrokers;
 
-    @Value("${app.kafka.topics.document-received-invoice}")
-    private String inputTopic;
+    @Value("${app.kafka.topics.saga-command-invoice}")
+    private String sagaCommandTopic;
 
-    @Value("${app.kafka.topics.invoice-processed}")
-    private String invoiceProcessedTopic;
-
-    @Value("${app.kafka.topics.xml-signing-requested}")
-    private String xmlSigningRequestedTopic;
+    @Value("${app.kafka.topics.saga-compensation-invoice}")
+    private String sagaCompensationTopic;
 
     @Value("${app.kafka.topics.dlq:invoice.processing.dlq}")
     private String dlqTopic;
 
-    public InvoiceRouteConfig(InvoiceProcessingService processingService) {
-        this.processingService = processingService;
+    public InvoiceRouteConfig(SagaCommandHandler sagaCommandHandler) {
+        this.sagaCommandHandler = sagaCommandHandler;
     }
 
     @Override
@@ -51,9 +49,9 @@ public class InvoiceRouteConfig extends RouteBuilder {
             .logStackTrace(true));
 
         // ============================================================
-        // CONSUMER ROUTE: document.received.invoice
+        // CONSUMER ROUTE: saga.command.invoice (from orchestrator)
         // ============================================================
-        from("kafka:" + inputTopic
+        from("kafka:" + sagaCommandTopic
                 + "?brokers=" + kafkaBrokers
                 + "&groupId=invoice-processing-service"
                 + "&autoOffsetReset=earliest"
@@ -61,45 +59,37 @@ public class InvoiceRouteConfig extends RouteBuilder {
                 + "&breakOnFirstError=true"
                 + "&maxPollRecords=100"
                 + "&consumersCount=3")
-            .routeId("invoice-processing-consumer")
-            .log("Received invoice from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
-
-            // Unmarshal JSON to InvoiceReceivedEvent
-            .unmarshal().json(JsonLibrary.Jackson, InvoiceReceivedEvent.class)
-
-            // Process the event - call application service
+            .routeId("saga-command-consumer")
+            .log("Received saga command from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
+            .unmarshal().json(JsonLibrary.Jackson, ProcessInvoiceCommand.class)
             .process(exchange -> {
-                InvoiceReceivedEvent event = exchange.getIn().getBody(InvoiceReceivedEvent.class);
-                log.info("Processing invoice: {}", event.getInvoiceNumber());
-
-                // Call existing application service (unchanged)
-                processingService.processInvoiceReceived(event);
+                ProcessInvoiceCommand cmd = exchange.getIn().getBody(ProcessInvoiceCommand.class);
+                log.info("Processing saga command for saga: {}, invoice: {}",
+                    cmd.getSagaId(), cmd.getInvoiceNumber());
+                sagaCommandHandler.handleProcessCommand(cmd);
             })
-
-            .log("Successfully processed invoice");
+            .log("Successfully processed saga command");
 
         // ============================================================
-        // PRODUCER ROUTE: invoice.processed
+        // CONSUMER ROUTE: saga.compensation.invoice (from orchestrator)
         // ============================================================
-        from("direct:publish-invoice-processed")
-            .routeId("invoice-processed-producer")
-            .log("Publishing InvoiceProcessedEvent: ${body.invoiceNumber}")
-            .marshal().json(JsonLibrary.Jackson)
-            .to("kafka:" + invoiceProcessedTopic
+        from("kafka:" + sagaCompensationTopic
                 + "?brokers=" + kafkaBrokers
-                + "&key=${header.kafka.KEY}")
-            .log("Published InvoiceProcessedEvent to " + invoiceProcessedTopic);
-
-        // ============================================================
-        // PRODUCER ROUTE: xml.signing.requested
-        // ============================================================
-        from("direct:publish-xml-signing-requested")
-            .routeId("xml-signing-requested-producer")
-            .log("Publishing XmlSigningRequestedEvent: ${body.invoiceNumber}")
-            .marshal().json(JsonLibrary.Jackson)
-            .to("kafka:" + xmlSigningRequestedTopic
-                + "?brokers=" + kafkaBrokers
-                + "&key=${header.kafka.KEY}")
-            .log("Published XmlSigningRequestedEvent to " + xmlSigningRequestedTopic);
+                + "&groupId=invoice-processing-service"
+                + "&autoOffsetReset=earliest"
+                + "&autoCommitEnable=false"
+                + "&breakOnFirstError=true"
+                + "&maxPollRecords=100"
+                + "&consumersCount=3")
+            .routeId("saga-compensation-consumer")
+            .log("Received compensation command from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
+            .unmarshal().json(JsonLibrary.Jackson, CompensateInvoiceCommand.class)
+            .process(exchange -> {
+                CompensateInvoiceCommand cmd = exchange.getIn().getBody(CompensateInvoiceCommand.class);
+                log.info("Processing compensation for saga: {}, document: {}",
+                    cmd.getSagaId(), cmd.getDocumentId());
+                sagaCommandHandler.handleCompensation(cmd);
+            })
+            .log("Successfully processed compensation command");
     }
 }

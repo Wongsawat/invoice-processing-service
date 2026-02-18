@@ -2,6 +2,7 @@ package com.wpanther.invoice.processing.domain.model;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Objects;
 
 /**
@@ -44,7 +45,7 @@ public record LineItem(
      */
     public Money getTaxAmount() {
         Money lineTotal = getLineTotal();
-        BigDecimal taxMultiplier = taxRate.divide(BigDecimal.valueOf(100), 4, BigDecimal.ROUND_HALF_UP);
+        BigDecimal taxMultiplier = taxRate.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
         return lineTotal.multiply(taxMultiplier);
     }
 
