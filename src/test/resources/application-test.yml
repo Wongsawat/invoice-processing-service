@@ -17,27 +17,21 @@ spring:
   flyway:
     enabled: false
 
-# Apache Camel test configuration
+# Apache Camel configuration
 camel:
   springboot:
-    name: taxinvoice-processing-camel-test
-  dataformat:
-    jackson:
-      auto-discover-object-mapper: true
+    name: invoice-processing-camel-test
+    main-run-controller: false
 
-# Application-specific configuration (test topics)
 app:
   kafka:
-    bootstrap-servers: localhost:9093
+    bootstrap-servers: localhost:9092
     topics:
-      taxinvoice-processed: taxinvoice.processed.test
-      dlq: taxinvoice.processing.dlq.test
-      saga-command-tax-invoice: saga.command.tax-invoice.test
-      saga-compensation-tax-invoice: saga.compensation.tax-invoice.test
-      saga-reply-tax-invoice: saga.reply.tax-invoice.test
+      invoice-processed: invoice.processed.test
+      dlq: invoice.processing.dlq.test
 
 logging:
   level:
     root: WARN
-    com.wpanther.taxinvoice.processing: INFO
-    org.apache.camel: WARN
+    com.wpanther.invoice.processing: INFO
+    org.apache.camel: INFO
