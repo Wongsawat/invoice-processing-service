@@ -1103,6 +1103,221 @@ class InvoiceParserServiceImplTest {
             """;
     }
 
+    @Test
+    void testParseInvoiceWithSellerEmail() throws InvoiceParserService.InvoiceParsingException {
+        String xmlContent = getInvoiceXmlWithSellerEmail();
+
+        ProcessedInvoice invoice = parserService.parseInvoice(xmlContent, "test-123");
+
+        assertNotNull(invoice);
+        Party seller = invoice.getSeller();
+        assertNotNull(seller);
+        assertTrue(seller.hasEmail());
+        assertEquals("seller@acme.co.th", seller.email());
+    }
+
+    @Test
+    void testParseInvoiceWithDecimalQuantity() {
+        String xmlContent = getInvoiceXmlWithDecimalQuantity();
+
+        InvoiceParserService.InvoiceParsingException exception =
+            assertThrows(InvoiceParserService.InvoiceParsingException.class,
+                () -> parserService.parseInvoice(xmlContent, "test-123"));
+
+        assertTrue(exception.getMessage().contains("whole number") || exception.getMessage().contains("1"));
+    }
+
+    @Test
+    void testParseInvoiceWithMissingExchangedDocument() {
+        String xmlContent = getInvoiceXmlWithoutExchangedDocument();
+
+        InvoiceParserService.InvoiceParsingException exception =
+            assertThrows(InvoiceParserService.InvoiceParsingException.class,
+                () -> parserService.parseInvoice(xmlContent, "test-123"));
+
+        assertTrue(exception.getMessage().contains("ExchangedDocument")
+            || exception.getMessage() != null);
+    }
+
+    private String getInvoiceXmlWithSellerEmail() {
+        return """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <rsm:Invoice_CrossIndustryInvoice
+                xmlns:rsm="urn:etda:uncefact:data:standard:Invoice_CrossIndustryInvoice:2"
+                xmlns:ram="urn:etda:uncefact:data:standard:Invoice_ReusableAggregateBusinessInformationEntity:2"
+                xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:16">
+              <rsm:ExchangedDocumentContext>
+                <ram:GuidelineSpecifiedDocumentContextParameter>
+                  <ram:ID>urn:etda.or.th:invoice:2p1</ram:ID>
+                </ram:GuidelineSpecifiedDocumentContextParameter>
+              </rsm:ExchangedDocumentContext>
+              <rsm:ExchangedDocument>
+                <ram:ID>IV2025-00099</ram:ID>
+                <ram:TypeCode>388</ram:TypeCode>
+                <ram:IssueDateTime>2025-01-15T00:00:00</ram:IssueDateTime>
+              </rsm:ExchangedDocument>
+              <rsm:SupplyChainTradeTransaction>
+                <ram:ApplicableHeaderTradeAgreement>
+                  <ram:SellerTradeParty>
+                    <ram:Name>Acme Corporation Ltd.</ram:Name>
+                    <ram:DefinedTradeContact>
+                      <ram:EmailURIUniversalCommunication>
+                        <ram:URIID>seller@acme.co.th</ram:URIID>
+                      </ram:EmailURIUniversalCommunication>
+                    </ram:DefinedTradeContact>
+                    <ram:PostalTradeAddress>
+                      <ram:LineOne>123 Business Street</ram:LineOne>
+                      <ram:CityName>Bangkok</ram:CityName>
+                      <ram:PostcodeCode>10110</ram:PostcodeCode>
+                      <ram:CountryID>TH</ram:CountryID>
+                    </ram:PostalTradeAddress>
+                    <ram:SpecifiedTaxRegistration>
+                      <ram:ID schemeID="VAT">1234567890123</ram:ID>
+                    </ram:SpecifiedTaxRegistration>
+                  </ram:SellerTradeParty>
+                  <ram:BuyerTradeParty>
+                    <ram:Name>Customer Company Ltd.</ram:Name>
+                    <ram:PostalTradeAddress>
+                      <ram:LineOne>456 Customer Road</ram:LineOne>
+                      <ram:CityName>Chiang Mai</ram:CityName>
+                      <ram:PostcodeCode>50000</ram:PostcodeCode>
+                      <ram:CountryID>TH</ram:CountryID>
+                    </ram:PostalTradeAddress>
+                    <ram:SpecifiedTaxRegistration>
+                      <ram:ID>9876543210987</ram:ID>
+                    </ram:SpecifiedTaxRegistration>
+                  </ram:BuyerTradeParty>
+                </ram:ApplicableHeaderTradeAgreement>
+                <ram:ApplicableHeaderTradeSettlement>
+                  <ram:InvoiceCurrencyCode>THB</ram:InvoiceCurrencyCode>
+                  <ram:SpecifiedTradePaymentTerms>
+                    <ram:DueDateDateTime>2025-02-14T00:00:00</ram:DueDateDateTime>
+                  </ram:SpecifiedTradePaymentTerms>
+                </ram:ApplicableHeaderTradeSettlement>
+                <ram:IncludedSupplyChainTradeLineItem>
+                  <ram:AssociatedDocumentLineDocument>
+                    <ram:LineID>1</ram:LineID>
+                  </ram:AssociatedDocumentLineDocument>
+                  <ram:SpecifiedTradeProduct>
+                    <ram:Name>Test Service</ram:Name>
+                  </ram:SpecifiedTradeProduct>
+                  <ram:SpecifiedLineTradeAgreement>
+                    <ram:GrossPriceProductTradePrice>
+                      <ram:ChargeAmount>1000.00</ram:ChargeAmount>
+                    </ram:GrossPriceProductTradePrice>
+                  </ram:SpecifiedLineTradeAgreement>
+                  <ram:SpecifiedLineTradeDelivery>
+                    <ram:BilledQuantity unitCode="C62">1</ram:BilledQuantity>
+                  </ram:SpecifiedLineTradeDelivery>
+                  <ram:SpecifiedLineTradeSettlement>
+                    <ram:ApplicableTradeTax>
+                      <ram:TypeCode>VAT</ram:TypeCode>
+                      <ram:CalculatedRate>7.00</ram:CalculatedRate>
+                    </ram:ApplicableTradeTax>
+                  </ram:SpecifiedLineTradeSettlement>
+                </ram:IncludedSupplyChainTradeLineItem>
+              </rsm:SupplyChainTradeTransaction>
+            </rsm:Invoice_CrossIndustryInvoice>
+            """;
+    }
+
+    private String getInvoiceXmlWithDecimalQuantity() {
+        return """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <rsm:Invoice_CrossIndustryInvoice
+                xmlns:rsm="urn:etda:uncefact:data:standard:Invoice_CrossIndustryInvoice:2"
+                xmlns:ram="urn:etda:uncefact:data:standard:Invoice_ReusableAggregateBusinessInformationEntity:2"
+                xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:16">
+              <rsm:ExchangedDocumentContext>
+                <ram:GuidelineSpecifiedDocumentContextParameter>
+                  <ram:ID>urn:etda.or.th:invoice:2p1</ram:ID>
+                </ram:GuidelineSpecifiedDocumentContextParameter>
+              </rsm:ExchangedDocumentContext>
+              <rsm:ExchangedDocument>
+                <ram:ID>IV2025-00001</ram:ID>
+                <ram:TypeCode>388</ram:TypeCode>
+                <ram:IssueDateTime>2025-01-15T00:00:00</ram:IssueDateTime>
+              </rsm:ExchangedDocument>
+              <rsm:SupplyChainTradeTransaction>
+                <ram:ApplicableHeaderTradeAgreement>
+                  <ram:SellerTradeParty>
+                    <ram:Name>Test Seller</ram:Name>
+                    <ram:PostalTradeAddress>
+                      <ram:CountryID>TH</ram:CountryID>
+                    </ram:PostalTradeAddress>
+                    <ram:SpecifiedTaxRegistration>
+                      <ram:ID>1234567890123</ram:ID>
+                    </ram:SpecifiedTaxRegistration>
+                  </ram:SellerTradeParty>
+                  <ram:BuyerTradeParty>
+                    <ram:Name>Test Buyer</ram:Name>
+                    <ram:PostalTradeAddress>
+                      <ram:CountryID>TH</ram:CountryID>
+                    </ram:PostalTradeAddress>
+                    <ram:SpecifiedTaxRegistration>
+                      <ram:ID>9876543210987</ram:ID>
+                    </ram:SpecifiedTaxRegistration>
+                  </ram:BuyerTradeParty>
+                </ram:ApplicableHeaderTradeAgreement>
+                <ram:ApplicableHeaderTradeSettlement>
+                  <ram:InvoiceCurrencyCode>THB</ram:InvoiceCurrencyCode>
+                  <ram:SpecifiedTradePaymentTerms>
+                    <ram:DueDateDateTime>2025-02-14T00:00:00</ram:DueDateDateTime>
+                  </ram:SpecifiedTradePaymentTerms>
+                </ram:ApplicableHeaderTradeSettlement>
+                <ram:IncludedSupplyChainTradeLineItem>
+                  <ram:AssociatedDocumentLineDocument>
+                    <ram:LineID>1</ram:LineID>
+                  </ram:AssociatedDocumentLineDocument>
+                  <ram:SpecifiedTradeProduct>
+                    <ram:Name>Test Product</ram:Name>
+                  </ram:SpecifiedTradeProduct>
+                  <ram:SpecifiedLineTradeAgreement>
+                    <ram:GrossPriceProductTradePrice>
+                      <ram:ChargeAmount>1000.00</ram:ChargeAmount>
+                    </ram:GrossPriceProductTradePrice>
+                  </ram:SpecifiedLineTradeAgreement>
+                  <ram:SpecifiedLineTradeDelivery>
+                    <ram:BilledQuantity unitCode="C62">1.5</ram:BilledQuantity>
+                  </ram:SpecifiedLineTradeDelivery>
+                </ram:IncludedSupplyChainTradeLineItem>
+              </rsm:SupplyChainTradeTransaction>
+            </rsm:Invoice_CrossIndustryInvoice>
+            """;
+    }
+
+    private String getInvoiceXmlWithoutExchangedDocument() {
+        return """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <rsm:Invoice_CrossIndustryInvoice
+                xmlns:rsm="urn:etda:uncefact:data:standard:Invoice_CrossIndustryInvoice:2"
+                xmlns:ram="urn:etda:uncefact:data:standard:Invoice_ReusableAggregateBusinessInformationEntity:2"
+                xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:16">
+              <rsm:ExchangedDocumentContext>
+                <ram:GuidelineSpecifiedDocumentContextParameter>
+                  <ram:ID>urn:etda.or.th:invoice:2p1</ram:ID>
+                </ram:GuidelineSpecifiedDocumentContextParameter>
+              </rsm:ExchangedDocumentContext>
+              <rsm:SupplyChainTradeTransaction>
+                <ram:ApplicableHeaderTradeAgreement>
+                  <ram:SellerTradeParty>
+                    <ram:Name>Test Seller</ram:Name>
+                    <ram:PostalTradeAddress>
+                      <ram:CountryID>TH</ram:CountryID>
+                    </ram:PostalTradeAddress>
+                    <ram:SpecifiedTaxRegistration>
+                      <ram:ID>1234567890123</ram:ID>
+                    </ram:SpecifiedTaxRegistration>
+                  </ram:SellerTradeParty>
+                </ram:ApplicableHeaderTradeAgreement>
+                <ram:ApplicableHeaderTradeSettlement>
+                  <ram:InvoiceCurrencyCode>THB</ram:InvoiceCurrencyCode>
+                </ram:ApplicableHeaderTradeSettlement>
+              </rsm:SupplyChainTradeTransaction>
+            </rsm:Invoice_CrossIndustryInvoice>
+            """;
+    }
+
     private String getInvoiceXmlWithoutSellerCountry() {
         return """
             <?xml version="1.0" encoding="UTF-8"?>

@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -60,5 +61,64 @@ class EventPublisherTest {
             eq("invoice-123"),
             anyString()
         );
+    }
+
+    @Test
+    void testPublishInvoiceProcessed_usesCorrectTopic() throws JsonProcessingException {
+        InvoiceProcessedEvent event = new InvoiceProcessedEvent(
+            "inv-456", "INV-002", new BigDecimal("5000.00"), "THB", "corr-456"
+        );
+        when(objectMapper.writeValueAsString(any(Map.class))).thenReturn("{}");
+
+        eventPublisher.publishInvoiceProcessed(event);
+
+        verify(outboxService).saveWithRouting(
+            any(), any(), any(), eq("invoice.processed"), any(), any()
+        );
+    }
+
+    @Test
+    void testPublishInvoiceProcessed_usesInvoiceIdAsPartitionKey() throws JsonProcessingException {
+        InvoiceProcessedEvent event = new InvoiceProcessedEvent(
+            "inv-789", "INV-003", new BigDecimal("2000.00"), "THB", "corr-789"
+        );
+        when(objectMapper.writeValueAsString(any(Map.class))).thenReturn("{}");
+
+        eventPublisher.publishInvoiceProcessed(event);
+
+        verify(outboxService).saveWithRouting(
+            any(),
+            eq("ProcessedInvoice"),
+            eq("inv-789"),
+            eq("invoice.processed"),
+            eq("inv-789"),
+            any()
+        );
+    }
+
+    @Test
+    void testPublishInvoiceProcessed_whenOutboxFails_propagatesException() throws JsonProcessingException {
+        InvoiceProcessedEvent event = new InvoiceProcessedEvent(
+            "inv-err", "INV-ERR", new BigDecimal("1000.00"), "THB", "corr-err"
+        );
+        when(objectMapper.writeValueAsString(any(Map.class))).thenReturn("{}");
+        doThrow(new RuntimeException("Outbox unavailable"))
+            .when(outboxService).saveWithRouting(any(), any(), any(), any(), any(), any());
+
+        assertThrows(RuntimeException.class,
+            () -> eventPublisher.publishInvoiceProcessed(event));
+    }
+
+    @Test
+    void testPublishInvoiceProcessed_headersFallbackWhenSerializationFails() throws JsonProcessingException {
+        InvoiceProcessedEvent event = new InvoiceProcessedEvent(
+            "inv-hdr", "INV-HDR", new BigDecimal("3000.00"), "THB", "corr-hdr"
+        );
+        when(objectMapper.writeValueAsString(any(Map.class))).thenThrow(JsonProcessingException.class);
+
+        // Should not throw - HeaderSerializer falls back to "{}"
+        eventPublisher.publishInvoiceProcessed(event);
+
+        verify(outboxService).saveWithRouting(any(), any(), any(), any(), any(), eq("{}"));
     }
 }
