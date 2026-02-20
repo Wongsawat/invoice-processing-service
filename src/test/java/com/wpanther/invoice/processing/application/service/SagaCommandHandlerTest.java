@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
@@ -183,5 +184,37 @@ class SagaCommandHandlerTest {
         verify(sagaReplyPort).publishFailure(
             eq("saga-1"), eq("COMPENSATE_process-invoice"), eq("corr-1"),
             contains("Compensation failed"));
+    }
+
+    @Test
+    void shouldSwallowPublishFailureException_inHandleProcessCommand() throws Exception {
+        // Given: processing fails AND publishFailure itself also fails (double-fault)
+        ProcessInvoiceCommand command = new ProcessInvoiceCommand(
+            "saga-double-fault", "process-invoice", "corr-double", "doc-fault", "<xml/>", "INV-FAULT"
+        );
+        when(processingService.processInvoiceForSaga(anyString(), anyString(), anyString()))
+            .thenThrow(new RuntimeException("Parse error"));
+        doThrow(new RuntimeException("Outbox unavailable"))
+            .when(sagaReplyPort).publishFailure(anyString(), anyString(), anyString(), anyString());
+
+        // When/Then: inner catch should swallow the publishFailure exception - no re-throw
+        assertDoesNotThrow(() -> sagaCommandHandler.handleProcessCommand(command));
+    }
+
+    @Test
+    void shouldSwallowPublishFailureException_inHandleCompensation() {
+        // Given: publishCompensated fails AND publishFailure also fails (double-fault in compensation)
+        CompensateInvoiceCommand command = new CompensateInvoiceCommand(
+            "saga-comp-double", "COMPENSATE_process-invoice", "corr-comp-double",
+            "process-invoice", "doc-comp-fault", "invoice"
+        );
+        when(invoiceRepository.findBySourceInvoiceId("doc-comp-fault")).thenReturn(Optional.empty());
+        doThrow(new RuntimeException("Compensated publish failed"))
+            .when(sagaReplyPort).publishCompensated(anyString(), anyString(), anyString());
+        doThrow(new RuntimeException("Failure publish also failed"))
+            .when(sagaReplyPort).publishFailure(anyString(), anyString(), anyString(), anyString());
+
+        // When/Then: inner catch should swallow the publishFailure exception - no re-throw
+        assertDoesNotThrow(() -> sagaCommandHandler.handleCompensation(command));
     }
 }

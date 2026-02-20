@@ -273,4 +273,56 @@ class ProcessedInvoiceRepositoryImplTest {
         assertEquals("Test error message", found.get().getErrorMessage());
         assertNotNull(found.get().getCompletedAt());
     }
+
+    @Test
+    void testFindByInvoiceNumber_found() {
+        // Given
+        repository.save(testInvoice);
+
+        // When
+        Optional<ProcessedInvoice> found = repository.findByInvoiceNumber("INV-TEST-001");
+
+        // Then
+        assertTrue(found.isPresent());
+        assertEquals("INV-TEST-001", found.get().getInvoiceNumber());
+        assertEquals("intake-test-123", found.get().getSourceInvoiceId());
+    }
+
+    @Test
+    void testFindByInvoiceNumber_notFound() {
+        // When
+        Optional<ProcessedInvoice> found = repository.findByInvoiceNumber("INV-NONEXISTENT");
+
+        // Then
+        assertFalse(found.isPresent());
+    }
+
+    @Test
+    void testExistsByInvoiceNumber_whenExists() {
+        // Given
+        repository.save(testInvoice);
+
+        // When/Then
+        assertTrue(repository.existsByInvoiceNumber("INV-TEST-001"));
+    }
+
+    @Test
+    void testExistsByInvoiceNumber_whenNotExists() {
+        // When/Then
+        assertFalse(repository.existsByInvoiceNumber("INV-NONEXISTENT"));
+    }
+
+    @Test
+    void testDeleteById() {
+        // Given
+        ProcessedInvoice saved = repository.save(testInvoice);
+        InvoiceId id = saved.getId();
+        assertTrue(repository.findById(id).isPresent());
+
+        // When
+        repository.deleteById(id);
+
+        // Then
+        assertFalse(repository.findById(id).isPresent());
+    }
 }

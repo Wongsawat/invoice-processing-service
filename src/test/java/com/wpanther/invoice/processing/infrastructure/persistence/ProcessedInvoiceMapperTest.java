@@ -386,4 +386,47 @@ class ProcessedInvoiceMapperTest {
             assertEquals(i + 1, items.get(i).getLineNumber());
         }
     }
+
+    @Test
+    void toDomain_whenNoSellerParty_throwsIllegalStateException() {
+        // Given: entity with BUYER only (no SELLER party)
+        ProcessedInvoiceEntity entity = mapper.toEntity(domainInvoice);
+        entity.getParties().removeIf(p -> p.getPartyType() == InvoicePartyEntity.PartyType.SELLER);
+
+        // When/Then
+        assertThrows(IllegalStateException.class, () -> mapper.toDomain(entity));
+    }
+
+    @Test
+    void toDomain_whenNoBuyerParty_throwsIllegalStateException() {
+        // Given: entity with SELLER only (no BUYER party)
+        ProcessedInvoiceEntity entity = mapper.toEntity(domainInvoice);
+        entity.getParties().removeIf(p -> p.getPartyType() == InvoicePartyEntity.PartyType.BUYER);
+
+        // When/Then
+        assertThrows(IllegalStateException.class, () -> mapper.toDomain(entity));
+    }
+
+    @Test
+    void toDomain_withNullTaxId_returnsPartyWithNullTaxIdentifier() {
+        // Given: entity where the seller party has null taxId (covers the null branch in toPartyDomain)
+        ProcessedInvoiceEntity entity = mapper.toEntity(domainInvoice);
+        entity.getParties().removeIf(p -> p.getPartyType() == InvoicePartyEntity.PartyType.SELLER);
+
+        InvoicePartyEntity sellerWithoutTaxId = InvoicePartyEntity.builder()
+            .partyType(InvoicePartyEntity.PartyType.SELLER)
+            .name("Seller Without Tax ID")
+            .taxId(null)
+            .taxIdScheme(null)
+            .country("TH")
+            .build();
+        entity.addParty(sellerWithoutTaxId);
+
+        // When
+        ProcessedInvoice reconstructed = mapper.toDomain(entity);
+
+        // Then
+        assertNotNull(reconstructed.getSeller());
+        assertNull(reconstructed.getSeller().taxIdentifier());
+    }
 }
