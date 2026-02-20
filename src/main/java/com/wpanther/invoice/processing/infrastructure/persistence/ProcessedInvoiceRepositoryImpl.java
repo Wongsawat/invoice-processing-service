@@ -30,11 +30,19 @@ public class ProcessedInvoiceRepositoryImpl implements ProcessedInvoiceRepositor
     public ProcessedInvoice save(ProcessedInvoice invoice) {
         log.debug("Saving processed invoice: {}", invoice.getInvoiceNumber());
 
-        ProcessedInvoiceEntity entity = mapper.toEntity(invoice);
-        ProcessedInvoiceEntity saved = jpaRepository.save(entity);
+        UUID id = invoice.getId().value();
+        if (jpaRepository.existsById(id)) {
+            ProcessedInvoiceEntity existing = jpaRepository.getReferenceById(id);
+            existing.setStatus(invoice.getStatus());
+            existing.setErrorMessage(invoice.getErrorMessage());
+            existing.setCompletedAt(invoice.getCompletedAt());
+            jpaRepository.save(existing);
+        } else {
+            jpaRepository.save(mapper.toEntity(invoice));
+        }
 
-        log.info("Saved processed invoice: {} with ID: {}", saved.getInvoiceNumber(), saved.getId());
-        return mapper.toDomain(saved);
+        log.debug("Saved processed invoice: {} with ID: {}", invoice.getInvoiceNumber(), id);
+        return invoice;
     }
 
     @Override

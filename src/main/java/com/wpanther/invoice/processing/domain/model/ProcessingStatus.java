@@ -22,15 +22,5 @@ public enum ProcessingStatus {
     /**
      * Invoice processing has failed
      */
-    FAILED,
-
-    /**
-     * PDF generation has been requested
-     */
-    PDF_REQUESTED,
-
-    /**
-     * PDF has been successfully generated
-     */
-    PDF_GENERATED
+    FAILED
 }

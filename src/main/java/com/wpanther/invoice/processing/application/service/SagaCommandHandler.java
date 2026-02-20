@@ -3,8 +3,8 @@ package com.wpanther.invoice.processing.application.service;
 import com.wpanther.invoice.processing.domain.event.CompensateInvoiceCommand;
 import com.wpanther.invoice.processing.domain.event.ProcessInvoiceCommand;
 import com.wpanther.invoice.processing.domain.model.ProcessedInvoice;
+import com.wpanther.invoice.processing.domain.port.SagaReplyPort;
 import com.wpanther.invoice.processing.domain.repository.ProcessedInvoiceRepository;
-import com.wpanther.invoice.processing.infrastructure.messaging.SagaReplyPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,7 +22,7 @@ import java.util.Optional;
 public class SagaCommandHandler {
 
     private final InvoiceProcessingService processingService;
-    private final SagaReplyPublisher sagaReplyPublisher;
+    private final SagaReplyPort sagaReplyPublisher;
     private final ProcessedInvoiceRepository invoiceRepository;
 
     /**
@@ -53,12 +53,16 @@ public class SagaCommandHandler {
             log.error("Failed to process invoice for saga {}: {}",
                 command.getSagaId(), e.getMessage(), e);
 
-            sagaReplyPublisher.publishFailure(
-                command.getSagaId(),
-                command.getSagaStep(),
-                command.getCorrelationId(),
-                e.getMessage()
-            );
+            try {
+                sagaReplyPublisher.publishFailure(
+                    command.getSagaId(),
+                    command.getSagaStep(),
+                    command.getCorrelationId(),
+                    e.getMessage()
+                );
+            } catch (Exception ex) {
+                log.error("Failed to publish FAILURE reply for saga {}: {}", command.getSagaId(), ex.getMessage(), ex);
+            }
         }
     }
 
@@ -94,12 +98,16 @@ public class SagaCommandHandler {
             log.error("Failed to compensate invoice for saga {}: {}",
                 command.getSagaId(), e.getMessage(), e);
 
-            sagaReplyPublisher.publishFailure(
-                command.getSagaId(),
-                command.getSagaStep(),
-                command.getCorrelationId(),
-                "Compensation failed: " + e.getMessage()
-            );
+            try {
+                sagaReplyPublisher.publishFailure(
+                    command.getSagaId(),
+                    command.getSagaStep(),
+                    command.getCorrelationId(),
+                    "Compensation failed: " + e.getMessage()
+                );
+            } catch (Exception ex) {
+                log.error("Failed to publish FAILURE reply for compensation saga {}: {}", command.getSagaId(), ex.getMessage(), ex);
+            }
         }
     }
 }

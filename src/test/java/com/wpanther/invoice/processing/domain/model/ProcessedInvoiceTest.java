@@ -197,53 +197,6 @@ class ProcessedInvoiceTest {
     }
 
     @Test
-    void testRequestPdfGeneration() {
-        // Given
-        ProcessedInvoice invoice = validInvoiceBuilder.build();
-        invoice.startProcessing();
-        invoice.markCompleted();
-
-        // When
-        invoice.requestPdfGeneration();
-
-        // Then
-        assertEquals(ProcessingStatus.PDF_REQUESTED, invoice.getStatus());
-    }
-
-    @Test
-    void testRequestPdfGenerationFromNonCompletedStatus() {
-        // Given
-        ProcessedInvoice invoice = validInvoiceBuilder.build();
-
-        // When/Then
-        assertThrows(IllegalStateException.class, invoice::requestPdfGeneration);
-    }
-
-    @Test
-    void testMarkPdfGenerated() {
-        // Given
-        ProcessedInvoice invoice = validInvoiceBuilder.build();
-        invoice.startProcessing();
-        invoice.markCompleted();
-        invoice.requestPdfGeneration();
-
-        // When
-        invoice.markPdfGenerated();
-
-        // Then
-        assertEquals(ProcessingStatus.PDF_GENERATED, invoice.getStatus());
-    }
-
-    @Test
-    void testMarkPdfGeneratedFromNonPdfRequestedStatus() {
-        // Given
-        ProcessedInvoice invoice = validInvoiceBuilder.build();
-
-        // When/Then
-        assertThrows(IllegalStateException.class, invoice::markPdfGenerated);
-    }
-
-    @Test
     void testNullId() {
         // When/Then
         assertThrows(NullPointerException.class, () ->
@@ -447,12 +400,6 @@ class ProcessedInvoiceTest {
         invoice.markCompleted();
         assertEquals(ProcessingStatus.COMPLETED, invoice.getStatus());
         assertNotNull(invoice.getCompletedAt());
-
-        invoice.requestPdfGeneration();
-        assertEquals(ProcessingStatus.PDF_REQUESTED, invoice.getStatus());
-
-        invoice.markPdfGenerated();
-        assertEquals(ProcessingStatus.PDF_GENERATED, invoice.getStatus());
     }
 
     @Test

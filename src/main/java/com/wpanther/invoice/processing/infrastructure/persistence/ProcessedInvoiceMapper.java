@@ -1,10 +1,18 @@
 package com.wpanther.invoice.processing.infrastructure.persistence;
 
-import com.wpanther.invoice.processing.domain.model.*;
+import com.wpanther.invoice.processing.domain.model.Address;
+import com.wpanther.invoice.processing.domain.model.InvoiceId;
+import com.wpanther.invoice.processing.domain.model.LineItem;
+import com.wpanther.invoice.processing.domain.model.Money;
+import com.wpanther.invoice.processing.domain.model.Party;
+import com.wpanther.invoice.processing.domain.model.ProcessedInvoice;
+import com.wpanther.invoice.processing.domain.model.TaxIdentifier;
 import com.wpanther.invoice.processing.infrastructure.persistence.InvoicePartyEntity.PartyType;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 
 /**
  * Mapper between domain model and JPA entities
@@ -74,6 +82,13 @@ public class ProcessedInvoiceMapper {
         List<LineItem> items = new ArrayList<>();
         for (InvoiceLineItemEntity itemEntity : entity.getLineItems()) {
             items.add(toLineItemDomain(itemEntity, entity.getCurrency()));
+        }
+
+        if (seller == null) {
+            throw new IllegalStateException("No SELLER party found for invoice " + entity.getId());
+        }
+        if (buyer == null) {
+            throw new IllegalStateException("No BUYER party found for invoice " + entity.getId());
         }
 
         // Build domain object

@@ -1,6 +1,7 @@
 package com.wpanther.invoice.processing.infrastructure.messaging;
 
 import com.wpanther.invoice.processing.domain.event.InvoiceReplyEvent;
+import com.wpanther.invoice.processing.domain.port.SagaReplyPort;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +18,7 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class SagaReplyPublisher {
+public class SagaReplyPublisher implements SagaReplyPort {
 
     private static final String REPLY_TOPIC = "saga.reply.invoice";
     private static final String AGGREGATE_TYPE = "ProcessedInvoice";
@@ -69,7 +70,7 @@ public class SagaReplyPublisher {
         log.info("Published FAILURE saga reply for saga {} step {}: {}", sagaId, sagaStep, errorMessage);
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.MANDATORY)
     public void publishCompensated(String sagaId, String sagaStep, String correlationId) {
         InvoiceReplyEvent reply = InvoiceReplyEvent.compensated(sagaId, sagaStep, correlationId);
 

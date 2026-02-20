@@ -249,18 +249,12 @@ class ProcessedInvoiceRepositoryImplTest {
         repository.save(saved);
 
         saved.markCompleted();
-        repository.save(saved);
-
-        saved.requestPdfGeneration();
-        repository.save(saved);
-
-        saved.markPdfGenerated();
         ProcessedInvoice finalInvoice = repository.save(saved);
 
         // Then
         Optional<ProcessedInvoice> found = repository.findById(finalInvoice.getId());
         assertTrue(found.isPresent());
-        assertEquals(ProcessingStatus.PDF_GENERATED, found.get().getStatus());
+        assertEquals(ProcessingStatus.COMPLETED, found.get().getStatus());
         assertNotNull(found.get().getCompletedAt());
     }
 

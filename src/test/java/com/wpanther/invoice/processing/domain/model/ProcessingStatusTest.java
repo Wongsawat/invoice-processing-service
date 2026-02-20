@@ -15,15 +15,13 @@ class ProcessingStatusTest {
         ProcessingStatus[] statuses = ProcessingStatus.values();
 
         // Then
-        assertEquals(6, statuses.length);
+        assertEquals(4, statuses.length);
         assertArrayEquals(
             new ProcessingStatus[]{
                 ProcessingStatus.PENDING,
                 ProcessingStatus.PROCESSING,
                 ProcessingStatus.COMPLETED,
-                ProcessingStatus.FAILED,
-                ProcessingStatus.PDF_REQUESTED,
-                ProcessingStatus.PDF_GENERATED
+                ProcessingStatus.FAILED
             },
             statuses
         );
@@ -35,8 +33,7 @@ class ProcessingStatusTest {
         assertEquals(ProcessingStatus.PENDING, ProcessingStatus.valueOf("PENDING"));
         assertEquals(ProcessingStatus.PROCESSING, ProcessingStatus.valueOf("PROCESSING"));
         assertEquals(ProcessingStatus.COMPLETED, ProcessingStatus.valueOf("COMPLETED"));
-        assertEquals(ProcessingStatus.PDF_REQUESTED, ProcessingStatus.valueOf("PDF_REQUESTED"));
-        assertEquals(ProcessingStatus.PDF_GENERATED, ProcessingStatus.valueOf("PDF_GENERATED"));
+        assertEquals(ProcessingStatus.FAILED, ProcessingStatus.valueOf("FAILED"));
     }
 
     @Test

@@ -159,26 +159,6 @@ public class ProcessedInvoice {
         this.completedAt = LocalDateTime.now();
     }
 
-    /**
-     * Mark PDF generation as requested
-     */
-    public void requestPdfGeneration() {
-        if (status != ProcessingStatus.COMPLETED) {
-            throw new IllegalStateException("Can only request PDF generation after processing is completed");
-        }
-        this.status = ProcessingStatus.PDF_REQUESTED;
-    }
-
-    /**
-     * Mark PDF as generated
-     */
-    public void markPdfGenerated() {
-        if (status != ProcessingStatus.PDF_REQUESTED) {
-            throw new IllegalStateException("Can only mark PDF generated from PDF_REQUESTED status");
-        }
-        this.status = ProcessingStatus.PDF_GENERATED;
-    }
-
     // Getters
     public InvoiceId getId() {
         return id;

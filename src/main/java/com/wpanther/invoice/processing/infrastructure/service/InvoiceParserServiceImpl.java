@@ -1,6 +1,12 @@
 package com.wpanther.invoice.processing.infrastructure.service;
 
-import com.wpanther.invoice.processing.domain.model.*;
+import com.wpanther.invoice.processing.domain.model.Address;
+import com.wpanther.invoice.processing.domain.model.InvoiceId;
+import com.wpanther.invoice.processing.domain.model.LineItem;
+import com.wpanther.invoice.processing.domain.model.Money;
+import com.wpanther.invoice.processing.domain.model.Party;
+import com.wpanther.invoice.processing.domain.model.ProcessedInvoice;
+import com.wpanther.invoice.processing.domain.model.TaxIdentifier;
 import com.wpanther.invoice.processing.domain.service.InvoiceParserService;
 import com.wpanther.etax.generated.invoice.ram.*;
 import com.wpanther.etax.generated.invoice.rsm.Invoice_CrossIndustryInvoiceType;
@@ -69,6 +75,7 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
 
             // Step 3: Map to domain model
             LocalDate issueDate = extractIssueDate(document);
+            String currency = extractCurrency(transaction);
 
             ProcessedInvoice invoice = ProcessedInvoice.builder()
                 .id(InvoiceId.generate())
@@ -78,8 +85,8 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
                 .dueDate(extractDueDate(transaction, issueDate))
                 .seller(extractSeller(transaction))
                 .buyer(extractBuyer(transaction))
-                .items(extractLineItems(transaction))
-                .currency(extractCurrency(transaction))
+                .items(extractLineItems(transaction, currency))
+                .currency(currency)
                 .originalXml(xmlContent)
                 .build();
 
@@ -93,7 +100,7 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
                 sourceInvoiceId, e.getMessage());
             throw e;
         } catch (Exception e) {
-            log.error("Unexpected error parsing invoice XML for source ID " + sourceInvoiceId, e);
+            log.error("Unexpected error parsing invoice XML for source ID {}", sourceInvoiceId, e);
             throw new InvoiceParsingException("Unexpected error during invoice parsing", e);
         }
     }
@@ -306,7 +313,7 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
     /**
      * Extract line items
      */
-    private List<LineItem> extractLineItems(SupplyChainTradeTransactionType transaction)
+    private List<LineItem> extractLineItems(SupplyChainTradeTransactionType transaction, String currency)
             throws InvoiceParsingException {
 
         List<SupplyChainTradeLineItemType> jaxbItems =
@@ -317,7 +324,6 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
         }
 
         List<LineItem> items = new ArrayList<>();
-        String currency = extractCurrency(transaction);
 
         for (int i = 0; i < jaxbItems.size(); i++) {
             try {
@@ -352,7 +358,11 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
             throw new InvoiceParsingException("Line item quantity is missing");
         }
         BigDecimal quantityDecimal = delivery.getBilledQuantity().getValue();
-        int quantity = quantityDecimal.intValue();
+        if (quantityDecimal.stripTrailingZeros().scale() > 0) {
+            throw new InvoiceParsingException(
+                "Line item quantity must be a whole number, got: " + quantityDecimal);
+        }
+        int quantity = quantityDecimal.intValueExact();
 
         // Extract unit price
         LineTradeAgreementType agreement = jaxbItem.getSpecifiedLineTradeAgreement();
