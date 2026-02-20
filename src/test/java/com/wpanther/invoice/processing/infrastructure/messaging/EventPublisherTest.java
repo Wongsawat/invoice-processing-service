@@ -1,5 +1,6 @@
 package com.wpanther.invoice.processing.infrastructure.messaging;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.invoice.processing.domain.event.InvoiceProcessedEvent;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
@@ -10,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -35,7 +37,7 @@ class EventPublisherTest {
     }
 
     @Test
-    void testPublishInvoiceProcessedSuccess() {
+    void testPublishInvoiceProcessedSuccess() throws JsonProcessingException {
         // Given
         InvoiceProcessedEvent event = new InvoiceProcessedEvent(
             "invoice-123",
@@ -44,6 +46,7 @@ class EventPublisherTest {
             "THB",
             "correlation-123"
         );
+        when(objectMapper.writeValueAsString(any(Map.class))).thenReturn("{\"correlationId\":\"correlation-123\",\"invoiceNumber\":\"INV-001\"}");
 
         // When
         eventPublisher.publishInvoiceProcessed(event);
