@@ -2,13 +2,22 @@ package com.wpanther.invoice.processing.infrastructure.service;
 
 import com.wpanther.invoice.processing.domain.model.*;
 import com.wpanther.invoice.processing.domain.service.InvoiceParserService;
+import jakarta.xml.bind.JAXBContext;
+import jakarta.xml.bind.JAXBException;
+import jakarta.xml.bind.Unmarshaller;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
+import java.io.Reader;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
+
 
 /**
  * Unit tests for InvoiceParserServiceImpl
@@ -18,8 +27,38 @@ class InvoiceParserServiceImplTest {
     private InvoiceParserService parserService;
 
     @BeforeEach
-    void setUp() throws InvoiceParserService.InvoiceParsingException {
+    void setUp() {
         parserService = new InvoiceParserServiceImpl();
+    }
+
+    @Test
+    void constructor_whenJaxbContextFails_throwsIllegalStateException() throws Exception {
+        try (MockedStatic<JAXBContext> mockedJaxb = mockStatic(JAXBContext.class)) {
+            mockedJaxb.when(() -> JAXBContext.newInstance(anyString()))
+                .thenThrow(new JAXBException("Simulated JAXB failure"));
+
+            assertThrows(IllegalStateException.class, () -> new InvoiceParserServiceImpl());
+        }
+    }
+
+    @Test
+    void parseInvoice_whenUnmarshalReturnsUnexpectedType_throwsInvoiceParsingException() throws Exception {
+        try (MockedStatic<JAXBContext> mockedJaxb = mockStatic(JAXBContext.class)) {
+            JAXBContext mockContext = mock(JAXBContext.class);
+            Unmarshaller mockUnmarshaller = mock(Unmarshaller.class);
+
+            mockedJaxb.when(() -> JAXBContext.newInstance(anyString())).thenReturn(mockContext);
+            when(mockContext.createUnmarshaller()).thenReturn(mockUnmarshaller);
+            when(mockUnmarshaller.unmarshal(any(Reader.class))).thenReturn("unexpected-string-type");
+
+            InvoiceParserServiceImpl service = new InvoiceParserServiceImpl();
+
+            InvoiceParserService.InvoiceParsingException ex = assertThrows(
+                InvoiceParserService.InvoiceParsingException.class,
+                () -> service.parseInvoice("<test/>", "test-id")
+            );
+            assertTrue(ex.getMessage().contains("Unexpected root element"));
+        }
     }
 
     @Test

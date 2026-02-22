@@ -10,7 +10,6 @@ import com.wpanther.invoice.processing.domain.model.TaxIdentifier;
 import com.wpanther.invoice.processing.domain.service.InvoiceParserService;
 import com.wpanther.etax.generated.invoice.ram.*;
 import com.wpanther.etax.generated.invoice.rsm.Invoice_CrossIndustryInvoiceType;
-import com.wpanther.etax.generated.invoice.rsm.impl.Invoice_CrossIndustryInvoiceTypeImpl;
 import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.Unmarshaller;
@@ -35,7 +34,7 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
 
     private final JAXBContext jaxbContext;
 
-    public InvoiceParserServiceImpl() throws InvoiceParsingException {
+    public InvoiceParserServiceImpl() {
         try {
             // Initialize JAXB context with the implementation package
             // The teda library uses interface/implementation pattern with a custom JAXBContextFactory
@@ -48,7 +47,7 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
             log.info("JAXB context initialized successfully for Thai e-Tax invoice parsing");
         } catch (JAXBException e) {
             log.error("Failed to initialize JAXB context", e);
-            throw new InvoiceParsingException("Failed to initialize XML parser", e);
+            throw new IllegalStateException("Failed to initialize XML parser", e);
         }
     }
 
@@ -99,9 +98,6 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
             log.error("Failed to parse invoice XML for source ID {}: {}",
                 sourceInvoiceId, e.getMessage());
             throw e;
-        } catch (Exception e) {
-            log.error("Unexpected error parsing invoice XML for source ID {}", sourceInvoiceId, e);
-            throw new InvoiceParsingException("Unexpected error during invoice parsing", e);
         }
     }
 
@@ -121,7 +117,6 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
 
             Object result = unmarshaller.unmarshal(reader);
 
-            // Handle JAXBElement wrapper (common when no @XmlRootElement annotation)
             if (result instanceof jakarta.xml.bind.JAXBElement) {
                 jakarta.xml.bind.JAXBElement<?> jaxbElement = (jakarta.xml.bind.JAXBElement<?>) result;
                 result = jaxbElement.getValue();
@@ -175,9 +170,6 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
             throws InvoiceParsingException {
 
         HeaderTradeSettlementType settlement = transaction.getApplicableHeaderTradeSettlement();
-        if (settlement == null) {
-            throw new InvoiceParsingException("Trade settlement information is missing");
-        }
 
         // Due date might be in payment terms
         List<TradePaymentTermsType> paymentTerms = settlement.getSpecifiedTradePaymentTerms();
@@ -419,9 +411,6 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
      * Convert XMLGregorianCalendar to LocalDate
      */
     private LocalDate convertXMLGregorianCalendarToLocalDate(XMLGregorianCalendar calendar) {
-        if (calendar == null) {
-            return null;
-        }
         return LocalDate.of(
             calendar.getYear(),
             calendar.getMonth(),
