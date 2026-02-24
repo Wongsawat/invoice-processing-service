@@ -1,6 +1,7 @@
 package com.wpanther.invoice.processing.domain.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -13,14 +14,14 @@ class CompensateInvoiceCommandTest {
     @Test
     void convenienceConstructor_setsAllFields() {
         CompensateInvoiceCommand cmd = new CompensateInvoiceCommand(
-            "saga-1", "COMPENSATE_INVOICE", "corr-1",
-            "PROCESS_INVOICE", "doc-123", "invoice"
+            "saga-1", SagaStep.PROCESS_INVOICE, "corr-1",
+            "process-invoice", "doc-123", "invoice"
         );
 
         assertEquals("saga-1", cmd.getSagaId());
-        assertEquals("COMPENSATE_INVOICE", cmd.getSagaStep());
+        assertEquals(SagaStep.PROCESS_INVOICE, cmd.getSagaStep());
         assertEquals("corr-1", cmd.getCorrelationId());
-        assertEquals("PROCESS_INVOICE", cmd.getStepToCompensate());
+        assertEquals("process-invoice", cmd.getStepToCompensate());
         assertEquals("doc-123", cmd.getDocumentId());
         assertEquals("invoice", cmd.getDocumentType());
         assertNotNull(cmd.getEventId());
@@ -33,16 +34,16 @@ class CompensateInvoiceCommandTest {
         Instant now = Instant.now();
         CompensateInvoiceCommand cmd = new CompensateInvoiceCommand(
             eventId, now, "CompensateInvoiceCommand", 1,
-            "saga-2", "COMPENSATE_INVOICE", "corr-2",
-            "PROCESS_INVOICE", "doc-456", "invoice"
+            "saga-2", SagaStep.PROCESS_INVOICE, "corr-2",
+            "process-invoice", "doc-456", "invoice"
         );
 
         assertEquals(eventId, cmd.getEventId());
         assertEquals(now, cmd.getOccurredAt());
         assertEquals("saga-2", cmd.getSagaId());
-        assertEquals("COMPENSATE_INVOICE", cmd.getSagaStep());
+        assertEquals(SagaStep.PROCESS_INVOICE, cmd.getSagaStep());
         assertEquals("corr-2", cmd.getCorrelationId());
-        assertEquals("PROCESS_INVOICE", cmd.getStepToCompensate());
+        assertEquals("process-invoice", cmd.getStepToCompensate());
         assertEquals("doc-456", cmd.getDocumentId());
         assertEquals("invoice", cmd.getDocumentType());
     }
@@ -54,8 +55,8 @@ class CompensateInvoiceCommandTest {
 
         CompensateInvoiceCommand original = new CompensateInvoiceCommand(
             UUID.randomUUID(), Instant.now(), "CompensateInvoiceCommand", 1,
-            "saga-3", "COMPENSATE_INVOICE", "corr-3",
-            "PROCESS_INVOICE", "doc-789", "invoice"
+            "saga-3", SagaStep.PROCESS_INVOICE, "corr-3",
+            "process-invoice", "doc-789", "invoice"
         );
 
         String json = objectMapper.writeValueAsString(original);
@@ -73,10 +74,10 @@ class CompensateInvoiceCommandTest {
     @Test
     void convenienceConstructor_generatesUniqueEventIds() {
         CompensateInvoiceCommand cmd1 = new CompensateInvoiceCommand(
-            "saga-1", "STEP", "corr-1", "PROCESS_INVOICE", "doc-1", "invoice"
+            "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "process-invoice", "doc-1", "invoice"
         );
         CompensateInvoiceCommand cmd2 = new CompensateInvoiceCommand(
-            "saga-2", "STEP", "corr-2", "PROCESS_INVOICE", "doc-2", "invoice"
+            "saga-2", SagaStep.PROCESS_INVOICE, "corr-2", "process-invoice", "doc-2", "invoice"
         );
 
         assertNotEquals(cmd1.getEventId(), cmd2.getEventId());

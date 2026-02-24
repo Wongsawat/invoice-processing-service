@@ -3,6 +3,7 @@ package com.wpanther.invoice.processing.application.service;
 import com.wpanther.invoice.processing.domain.event.CompensateInvoiceCommand;
 import com.wpanther.invoice.processing.domain.event.ProcessInvoiceCommand;
 import com.wpanther.invoice.processing.domain.model.Address;
+import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.invoice.processing.domain.model.InvoiceId;
 import com.wpanther.invoice.processing.domain.model.LineItem;
 import com.wpanther.invoice.processing.domain.model.Money;
@@ -85,7 +86,7 @@ class SagaCommandHandlerTest {
     void shouldPublishSuccessWhenProcessingSucceeds() throws Exception {
         // Given
         ProcessInvoiceCommand command = new ProcessInvoiceCommand(
-            "saga-1", "process-invoice", "corr-1", "doc-001", "<xml/>", "INV-001"
+            "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "doc-001", "<xml/>", "INV-001"
         );
         when(processingService.processInvoiceForSaga(anyString(), anyString(), anyString()))
             .thenReturn(testInvoice);
@@ -94,15 +95,15 @@ class SagaCommandHandlerTest {
         sagaCommandHandler.handleProcessCommand(command);
 
         // Then
-        verify(sagaReplyPort).publishSuccess("saga-1", "process-invoice", "corr-1");
-        verify(sagaReplyPort, never()).publishFailure(anyString(), anyString(), anyString(), anyString());
+        verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_INVOICE, "corr-1");
+        verify(sagaReplyPort, never()).publishFailure(anyString(), any(SagaStep.class), anyString(), anyString());
     }
 
     @Test
     void shouldPublishFailureWhenProcessingThrows() throws Exception {
         // Given
         ProcessInvoiceCommand command = new ProcessInvoiceCommand(
-            "saga-1", "process-invoice", "corr-1", "doc-001", "<xml/>", "INV-001"
+            "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "doc-001", "<xml/>", "INV-001"
         );
         when(processingService.processInvoiceForSaga(anyString(), anyString(), anyString()))
             .thenThrow(new RuntimeException("Parse error"));
@@ -112,34 +113,34 @@ class SagaCommandHandlerTest {
 
         // Then
         verify(sagaReplyPort).publishFailure(
-            eq("saga-1"), eq("process-invoice"), eq("corr-1"), contains("Parse error"));
-        verify(sagaReplyPort, never()).publishSuccess(anyString(), anyString(), anyString());
+            eq("saga-1"), eq(SagaStep.PROCESS_INVOICE), eq("corr-1"), contains("Parse error"));
+        verify(sagaReplyPort, never()).publishSuccess(anyString(), any(SagaStep.class), anyString());
     }
 
     @Test
     void shouldPublishFailureWhenPublishSuccessThrows() throws Exception {
         // Given
         ProcessInvoiceCommand command = new ProcessInvoiceCommand(
-            "saga-1", "process-invoice", "corr-1", "doc-001", "<xml/>", "INV-001"
+            "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "doc-001", "<xml/>", "INV-001"
         );
         when(processingService.processInvoiceForSaga(anyString(), anyString(), anyString()))
             .thenReturn(testInvoice);
         doThrow(new RuntimeException("Outbox failure"))
-            .when(sagaReplyPort).publishSuccess(anyString(), anyString(), anyString());
+            .when(sagaReplyPort).publishSuccess(anyString(), any(SagaStep.class), anyString());
 
         // When
         sagaCommandHandler.handleProcessCommand(command);
 
         // Then
         verify(sagaReplyPort).publishFailure(
-            eq("saga-1"), eq("process-invoice"), eq("corr-1"), contains("Outbox failure"));
+            eq("saga-1"), eq(SagaStep.PROCESS_INVOICE), eq("corr-1"), contains("Outbox failure"));
     }
 
     @Test
     void shouldPublishCompensatedWhenInvoiceFound() {
         // Given
         CompensateInvoiceCommand command = new CompensateInvoiceCommand(
-            "saga-1", "COMPENSATE_process-invoice", "corr-1", "process-invoice", "doc-001", "invoice"
+            "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "process-invoice", "doc-001", "invoice"
         );
         when(invoiceRepository.findBySourceInvoiceId("doc-001")).thenReturn(Optional.of(testInvoice));
 
@@ -148,14 +149,14 @@ class SagaCommandHandlerTest {
 
         // Then
         verify(invoiceRepository).deleteById(testInvoice.getId());
-        verify(sagaReplyPort).publishCompensated("saga-1", "COMPENSATE_process-invoice", "corr-1");
+        verify(sagaReplyPort).publishCompensated("saga-1", SagaStep.PROCESS_INVOICE, "corr-1");
     }
 
     @Test
     void shouldPublishCompensatedWhenInvoiceNotFound() {
         // Given
         CompensateInvoiceCommand command = new CompensateInvoiceCommand(
-            "saga-1", "COMPENSATE_process-invoice", "corr-1", "process-invoice", "doc-001", "invoice"
+            "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "process-invoice", "doc-001", "invoice"
         );
         when(invoiceRepository.findBySourceInvoiceId("doc-001")).thenReturn(Optional.empty());
 
@@ -164,25 +165,25 @@ class SagaCommandHandlerTest {
 
         // Then
         verify(invoiceRepository, never()).deleteById(any());
-        verify(sagaReplyPort).publishCompensated("saga-1", "COMPENSATE_process-invoice", "corr-1");
+        verify(sagaReplyPort).publishCompensated("saga-1", SagaStep.PROCESS_INVOICE, "corr-1");
     }
 
     @Test
     void shouldPublishFailureWhenCompensationThrows() {
         // Given
         CompensateInvoiceCommand command = new CompensateInvoiceCommand(
-            "saga-1", "COMPENSATE_process-invoice", "corr-1", "process-invoice", "doc-001", "invoice"
+            "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "process-invoice", "doc-001", "invoice"
         );
         when(invoiceRepository.findBySourceInvoiceId("doc-001")).thenReturn(Optional.empty());
         doThrow(new RuntimeException("Outbox failure"))
-            .when(sagaReplyPort).publishCompensated(anyString(), anyString(), anyString());
+            .when(sagaReplyPort).publishCompensated(anyString(), any(SagaStep.class), anyString());
 
         // When
         sagaCommandHandler.handleCompensation(command);
 
         // Then
         verify(sagaReplyPort).publishFailure(
-            eq("saga-1"), eq("COMPENSATE_process-invoice"), eq("corr-1"),
+            eq("saga-1"), eq(SagaStep.PROCESS_INVOICE), eq("corr-1"),
             contains("Compensation failed"));
     }
 
@@ -190,12 +191,12 @@ class SagaCommandHandlerTest {
     void shouldSwallowPublishFailureException_inHandleProcessCommand() throws Exception {
         // Given: processing fails AND publishFailure itself also fails (double-fault)
         ProcessInvoiceCommand command = new ProcessInvoiceCommand(
-            "saga-double-fault", "process-invoice", "corr-double", "doc-fault", "<xml/>", "INV-FAULT"
+            "saga-double-fault", SagaStep.PROCESS_INVOICE, "corr-double", "doc-fault", "<xml/>", "INV-FAULT"
         );
         when(processingService.processInvoiceForSaga(anyString(), anyString(), anyString()))
             .thenThrow(new RuntimeException("Parse error"));
         doThrow(new RuntimeException("Outbox unavailable"))
-            .when(sagaReplyPort).publishFailure(anyString(), anyString(), anyString(), anyString());
+            .when(sagaReplyPort).publishFailure(anyString(), any(SagaStep.class), anyString(), anyString());
 
         // When/Then: inner catch should swallow the publishFailure exception - no re-throw
         assertDoesNotThrow(() -> sagaCommandHandler.handleProcessCommand(command));
@@ -205,14 +206,14 @@ class SagaCommandHandlerTest {
     void shouldSwallowPublishFailureException_inHandleCompensation() {
         // Given: publishCompensated fails AND publishFailure also fails (double-fault in compensation)
         CompensateInvoiceCommand command = new CompensateInvoiceCommand(
-            "saga-comp-double", "COMPENSATE_process-invoice", "corr-comp-double",
+            "saga-comp-double", SagaStep.PROCESS_INVOICE, "corr-comp-double",
             "process-invoice", "doc-comp-fault", "invoice"
         );
         when(invoiceRepository.findBySourceInvoiceId("doc-comp-fault")).thenReturn(Optional.empty());
         doThrow(new RuntimeException("Compensated publish failed"))
-            .when(sagaReplyPort).publishCompensated(anyString(), anyString(), anyString());
+            .when(sagaReplyPort).publishCompensated(anyString(), any(SagaStep.class), anyString());
         doThrow(new RuntimeException("Failure publish also failed"))
-            .when(sagaReplyPort).publishFailure(anyString(), anyString(), anyString(), anyString());
+            .when(sagaReplyPort).publishFailure(anyString(), any(SagaStep.class), anyString(), anyString());
 
         // When/Then: inner catch should swallow the publishFailure exception - no re-throw
         assertDoesNotThrow(() -> sagaCommandHandler.handleCompensation(command));

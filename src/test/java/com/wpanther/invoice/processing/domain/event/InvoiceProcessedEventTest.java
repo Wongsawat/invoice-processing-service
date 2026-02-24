@@ -32,6 +32,7 @@ class InvoiceProcessedEventTest {
         assertEquals(invoiceNumber, event.getInvoiceNumber());
         assertEquals(total, event.getTotal());
         assertEquals(currency, event.getCurrency());
+        // correlationId is stored as sagaId in TraceEvent
         assertEquals(correlationId, event.getCorrelationId());
         assertEquals("invoice.processed", event.getEventType());
         assertNotNull(event.getEventId());
@@ -56,7 +57,7 @@ class InvoiceProcessedEventTest {
         String json = objectMapper.writeValueAsString(event);
         InvoiceProcessedEvent deserialized = objectMapper.readValue(json, InvoiceProcessedEvent.class);
 
-        // Then
+        // Then - correlationId is stored/restored via sagaId field in JSON
         assertEquals(event.getEventId(), deserialized.getEventId());
         assertEquals(event.getInvoiceId(), deserialized.getInvoiceId());
         assertEquals(event.getInvoiceNumber(), deserialized.getInvoiceNumber());

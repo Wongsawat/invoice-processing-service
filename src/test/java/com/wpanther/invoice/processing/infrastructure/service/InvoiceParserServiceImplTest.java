@@ -9,7 +9,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
-import java.io.Reader;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.parsers.SAXParserFactory;
+import javax.xml.transform.Source;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
@@ -49,7 +51,7 @@ class InvoiceParserServiceImplTest {
 
             mockedJaxb.when(() -> JAXBContext.newInstance(anyString())).thenReturn(mockContext);
             when(mockContext.createUnmarshaller()).thenReturn(mockUnmarshaller);
-            when(mockUnmarshaller.unmarshal(any(Reader.class))).thenReturn("unexpected-string-type");
+            when(mockUnmarshaller.unmarshal(any(Source.class))).thenReturn("unexpected-string-type");
 
             InvoiceParserServiceImpl service = new InvoiceParserServiceImpl();
 
@@ -59,6 +61,23 @@ class InvoiceParserServiceImplTest {
             );
             assertTrue(ex.getMessage().contains("Unexpected root element"));
         }
+    }
+
+    @Test
+    void parseInvoice_whenXmlContainsDoctype_throwsInvoiceParsingException() {
+        // Given: XML with a DOCTYPE declaration (XXE attack vector)
+        String xxeXml = "<?xml version=\"1.0\"?>"
+            + "<!DOCTYPE foo [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>"
+            + "<foo>&xxe;</foo>";
+
+        // When/Then: parsing must be rejected before any external resource is accessed
+        InvoiceParserService.InvoiceParsingException ex = assertThrows(
+            InvoiceParserService.InvoiceParsingException.class,
+            () -> parserService.parseInvoice(xxeXml, "attack-id")
+        );
+        assertTrue(ex.getMessage().contains("Failed to parse XML")
+            || ex.getMessage().contains("DOCTYPE"),
+            "Expected parse rejection due to DOCTYPE; got: " + ex.getMessage());
     }
 
     @Test
@@ -1850,5 +1869,21 @@ class InvoiceParserServiceImplTest {
               </rsm:SupplyChainTradeTransaction>
             </rsm:Invoice_CrossIndustryInvoice>
             """;
+    }
+
+    @Test
+    void parseInvoice_whenSaxParserConfigFails_throwsInvoiceParsingException() throws Exception {
+        try (MockedStatic<SAXParserFactory> mockedSpf = mockStatic(SAXParserFactory.class)) {
+            SAXParserFactory mockFactory = mock(SAXParserFactory.class);
+            mockedSpf.when(SAXParserFactory::newInstance).thenReturn(mockFactory);
+            doThrow(new ParserConfigurationException("Simulated config failure"))
+                .when(mockFactory).setFeature(anyString(), anyBoolean());
+
+            InvoiceParserService.InvoiceParsingException ex = assertThrows(
+                InvoiceParserService.InvoiceParsingException.class,
+                () -> parserService.parseInvoice("<xml>test</xml>", "test-id")
+            );
+            assertTrue(ex.getMessage().contains("Failed to configure XML parser"));
+        }
     }
 }

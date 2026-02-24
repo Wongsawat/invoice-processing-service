@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.invoice.processing.application.service.SagaCommandHandler;
 import com.wpanther.invoice.processing.domain.event.CompensateInvoiceCommand;
 import com.wpanther.invoice.processing.domain.event.ProcessInvoiceCommand;
+import com.wpanther.saga.domain.enums.SagaStep;
 import org.apache.camel.CamelContext;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.builder.AdviceWith;
@@ -73,7 +74,7 @@ class InvoiceRouteConfigTest {
     @Test
     void sagaCommandRoute_deserializesJsonAndCallsHandler() throws Exception {
         ProcessInvoiceCommand command = new ProcessInvoiceCommand(
-            "saga-1", "PROCESS_INVOICE", "corr-1", "doc-001", "<xml/>", "INV-001"
+            "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "doc-001", "<xml/>", "INV-001"
         );
         String json = objectMapper.writeValueAsString(command);
 
@@ -86,8 +87,8 @@ class InvoiceRouteConfigTest {
     @Test
     void sagaCompensationRoute_deserializesJsonAndCallsHandler() throws Exception {
         CompensateInvoiceCommand command = new CompensateInvoiceCommand(
-            "saga-2", "COMPENSATE_INVOICE", "corr-2",
-            "PROCESS_INVOICE", "doc-002", "invoice"
+            "saga-2", SagaStep.PROCESS_INVOICE, "corr-2",
+            "process-invoice", "doc-002", "invoice"
         );
         String json = objectMapper.writeValueAsString(command);
 
@@ -103,7 +104,7 @@ class InvoiceRouteConfigTest {
             .when(sagaCommandHandler).handleProcessCommand(any());
 
         ProcessInvoiceCommand command = new ProcessInvoiceCommand(
-            "saga-err", "PROCESS_INVOICE", "corr-err", "doc-err", "<xml/>", "INV-ERR"
+            "saga-err", SagaStep.PROCESS_INVOICE, "corr-err", "doc-err", "<xml/>", "INV-ERR"
         );
         String json = objectMapper.writeValueAsString(command);
 

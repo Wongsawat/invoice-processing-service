@@ -15,8 +15,15 @@ import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.Unmarshaller;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+import org.xml.sax.XMLReader;
 
+import javax.xml.XMLConstants;
 import javax.xml.datatype.XMLGregorianCalendar;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.parsers.SAXParserFactory;
+import javax.xml.transform.sax.SAXSource;
 import java.io.StringReader;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -102,7 +109,10 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
     }
 
     /**
-     * Unmarshal XML string to JAXB object
+     * Unmarshal XML string to JAXB object.
+     *
+     * Uses a hardened SAXParser with DOCTYPE declarations and external entity
+     * resolution disabled to prevent XXE (XML External Entity) injection attacks.
      */
     private Invoice_CrossIndustryInvoiceType unmarshalXml(String xmlContent)
             throws InvoiceParsingException {
@@ -112,10 +122,22 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
         }
 
         try {
-            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-            StringReader reader = new StringReader(xmlContent);
+            SAXParserFactory spf = SAXParserFactory.newInstance();
+            spf.setNamespaceAware(true);
+            // Block DOCTYPE declarations entirely (prevents XXE and billion-laughs attacks)
+            spf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            // Defense-in-depth: disable external general and parameter entities
+            spf.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            spf.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            // Disable loading of external DTD subsets
+            spf.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+            spf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
 
-            Object result = unmarshaller.unmarshal(reader);
+            XMLReader xmlReader = spf.newSAXParser().getXMLReader();
+            SAXSource source = new SAXSource(xmlReader, new InputSource(new StringReader(xmlContent)));
+
+            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+            Object result = unmarshaller.unmarshal(source);
 
             if (result instanceof jakarta.xml.bind.JAXBElement) {
                 jakarta.xml.bind.JAXBElement<?> jaxbElement = (jakarta.xml.bind.JAXBElement<?>) result;
@@ -133,6 +155,9 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
         } catch (JAXBException e) {
             log.error("JAXB unmarshalling failed", e);
             throw new InvoiceParsingException("Failed to parse XML: " + e.getMessage(), e);
+        } catch (ParserConfigurationException | SAXException e) {
+            log.error("Failed to configure secure XML parser", e);
+            throw new InvoiceParsingException("Failed to configure XML parser: " + e.getMessage(), e);
         }
     }
 

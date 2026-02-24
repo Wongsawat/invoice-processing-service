@@ -1,6 +1,7 @@
 package com.wpanther.invoice.processing.infrastructure.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,7 +28,7 @@ class SagaReplyPublisherTest {
 
     @Test
     void publishSuccess_savesReplyToOutbox() {
-        sagaReplyPublisher.publishSuccess("saga-1", "PROCESS_INVOICE", "corr-1");
+        sagaReplyPublisher.publishSuccess("saga-1", SagaStep.PROCESS_INVOICE, "corr-1");
 
         verify(outboxService).saveWithRouting(
             argThat(event -> event.getEventType() != null),
@@ -41,7 +42,7 @@ class SagaReplyPublisherTest {
 
     @Test
     void publishSuccess_includesCorrectHeaders() {
-        sagaReplyPublisher.publishSuccess("saga-abc", "PROCESS_INVOICE", "corr-abc");
+        sagaReplyPublisher.publishSuccess("saga-abc", SagaStep.PROCESS_INVOICE, "corr-abc");
 
         verify(outboxService).saveWithRouting(
             any(),
@@ -55,7 +56,7 @@ class SagaReplyPublisherTest {
 
     @Test
     void publishFailure_savesFailureReplyToOutbox() {
-        sagaReplyPublisher.publishFailure("saga-2", "PROCESS_INVOICE", "corr-2", "Parse error");
+        sagaReplyPublisher.publishFailure("saga-2", SagaStep.PROCESS_INVOICE, "corr-2", "Parse error");
 
         verify(outboxService).saveWithRouting(
             argThat(event -> event.getEventType() != null),
@@ -69,7 +70,7 @@ class SagaReplyPublisherTest {
 
     @Test
     void publishFailure_includesCorrectHeaders() {
-        sagaReplyPublisher.publishFailure("saga-xyz", "PROCESS_INVOICE", "corr-xyz", "Some error");
+        sagaReplyPublisher.publishFailure("saga-xyz", SagaStep.PROCESS_INVOICE, "corr-xyz", "Some error");
 
         verify(outboxService).saveWithRouting(
             any(),
@@ -83,7 +84,7 @@ class SagaReplyPublisherTest {
 
     @Test
     void publishCompensated_savesCompensatedReplyToOutbox() {
-        sagaReplyPublisher.publishCompensated("saga-3", "COMPENSATE_INVOICE", "corr-3");
+        sagaReplyPublisher.publishCompensated("saga-3", SagaStep.PROCESS_INVOICE, "corr-3");
 
         verify(outboxService).saveWithRouting(
             argThat(event -> event.getEventType() != null),
@@ -97,7 +98,7 @@ class SagaReplyPublisherTest {
 
     @Test
     void publishCompensated_includesCorrectHeaders() {
-        sagaReplyPublisher.publishCompensated("saga-comp", "COMPENSATE_INVOICE", "corr-comp");
+        sagaReplyPublisher.publishCompensated("saga-comp", SagaStep.PROCESS_INVOICE, "corr-comp");
 
         verify(outboxService).saveWithRouting(
             any(),
@@ -115,6 +116,6 @@ class SagaReplyPublisherTest {
             .when(outboxService).saveWithRouting(any(), any(), any(), any(), any(), any());
 
         org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
-            () -> sagaReplyPublisher.publishSuccess("saga-1", "PROCESS_INVOICE", "corr-1"));
+            () -> sagaReplyPublisher.publishSuccess("saga-1", SagaStep.PROCESS_INVOICE, "corr-1"));
     }
 }

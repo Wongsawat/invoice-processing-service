@@ -2,6 +2,7 @@ package com.wpanther.invoice.processing.infrastructure.messaging;
 
 import com.wpanther.invoice.processing.domain.event.InvoiceReplyEvent;
 import com.wpanther.invoice.processing.domain.port.SagaReplyPort;
+import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +28,7 @@ public class SagaReplyPublisher implements SagaReplyPort {
     private final HeaderSerializer headerSerializer;
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void publishSuccess(String sagaId, String sagaStep, String correlationId) {
+    public void publishSuccess(String sagaId, SagaStep sagaStep, String correlationId) {
         InvoiceReplyEvent reply = InvoiceReplyEvent.success(sagaId, sagaStep, correlationId);
 
         Map<String, String> headers = Map.of(
@@ -49,7 +50,7 @@ public class SagaReplyPublisher implements SagaReplyPort {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void publishFailure(String sagaId, String sagaStep, String correlationId, String errorMessage) {
+    public void publishFailure(String sagaId, SagaStep sagaStep, String correlationId, String errorMessage) {
         InvoiceReplyEvent reply = InvoiceReplyEvent.failure(sagaId, sagaStep, correlationId, errorMessage);
 
         Map<String, String> headers = Map.of(
@@ -71,7 +72,7 @@ public class SagaReplyPublisher implements SagaReplyPort {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void publishCompensated(String sagaId, String sagaStep, String correlationId) {
+    public void publishCompensated(String sagaId, SagaStep sagaStep, String correlationId) {
         InvoiceReplyEvent reply = InvoiceReplyEvent.compensated(sagaId, sagaStep, correlationId);
 
         Map<String, String> headers = Map.of(

@@ -1,6 +1,7 @@
 package com.wpanther.invoice.processing.domain.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -13,11 +14,11 @@ class ProcessInvoiceCommandTest {
     @Test
     void convenienceConstructor_setsAllFields() {
         ProcessInvoiceCommand cmd = new ProcessInvoiceCommand(
-            "saga-1", "PROCESS_INVOICE", "corr-1", "doc-123", "<xml/>", "INV-001"
+            "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "doc-123", "<xml/>", "INV-001"
         );
 
         assertEquals("saga-1", cmd.getSagaId());
-        assertEquals("PROCESS_INVOICE", cmd.getSagaStep());
+        assertEquals(SagaStep.PROCESS_INVOICE, cmd.getSagaStep());
         assertEquals("corr-1", cmd.getCorrelationId());
         assertEquals("doc-123", cmd.getDocumentId());
         assertEquals("<xml/>", cmd.getXmlContent());
@@ -32,13 +33,13 @@ class ProcessInvoiceCommandTest {
         Instant now = Instant.now();
         ProcessInvoiceCommand cmd = new ProcessInvoiceCommand(
             eventId, now, "ProcessInvoiceCommand", 1,
-            "saga-2", "PROCESS_INVOICE", "corr-2", "doc-456", "<invoice/>", "INV-002"
+            "saga-2", SagaStep.PROCESS_INVOICE, "corr-2", "doc-456", "<invoice/>", "INV-002"
         );
 
         assertEquals(eventId, cmd.getEventId());
         assertEquals(now, cmd.getOccurredAt());
         assertEquals("saga-2", cmd.getSagaId());
-        assertEquals("PROCESS_INVOICE", cmd.getSagaStep());
+        assertEquals(SagaStep.PROCESS_INVOICE, cmd.getSagaStep());
         assertEquals("corr-2", cmd.getCorrelationId());
         assertEquals("doc-456", cmd.getDocumentId());
         assertEquals("<invoice/>", cmd.getXmlContent());
@@ -52,7 +53,7 @@ class ProcessInvoiceCommandTest {
 
         ProcessInvoiceCommand original = new ProcessInvoiceCommand(
             UUID.randomUUID(), Instant.now(), "ProcessInvoiceCommand", 1,
-            "saga-3", "PROCESS_INVOICE", "corr-3", "doc-789", "<xml>content</xml>", "INV-003"
+            "saga-3", SagaStep.PROCESS_INVOICE, "corr-3", "doc-789", "<xml>content</xml>", "INV-003"
         );
 
         String json = objectMapper.writeValueAsString(original);
@@ -70,10 +71,10 @@ class ProcessInvoiceCommandTest {
     @Test
     void convenienceConstructor_generatesUniqueEventIds() {
         ProcessInvoiceCommand cmd1 = new ProcessInvoiceCommand(
-            "saga-1", "STEP", "corr-1", "doc-1", "<xml/>", "INV-001"
+            "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "doc-1", "<xml/>", "INV-001"
         );
         ProcessInvoiceCommand cmd2 = new ProcessInvoiceCommand(
-            "saga-2", "STEP", "corr-2", "doc-2", "<xml/>", "INV-002"
+            "saga-2", SagaStep.PROCESS_INVOICE, "corr-2", "doc-2", "<xml/>", "INV-002"
         );
 
         assertNotEquals(cmd1.getEventId(), cmd2.getEventId());
