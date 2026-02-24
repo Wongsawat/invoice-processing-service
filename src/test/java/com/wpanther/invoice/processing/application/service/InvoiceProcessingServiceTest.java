@@ -12,6 +12,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -219,5 +220,48 @@ class InvoiceProcessingServiceTest {
 
         // Then - Should save twice: PROCESSING state, then COMPLETED state
         verify(invoiceRepository, times(2)).save(any(ProcessedInvoice.class));
+    }
+
+    @Test
+    void testProcessInvoiceForSagaHandlesRaceCondition() throws Exception {
+        // Given - simulating race condition:
+        // 1. First check returns empty (no existing invoice)
+        // 2. Save throws DataIntegrityViolationException (concurrent insert)
+        // 3. Second fetch returns the existing invoice
+        when(invoiceRepository.findBySourceInvoiceId("intake-123"))
+            .thenReturn(Optional.empty())  // First call - not found
+            .thenReturn(Optional.of(validInvoice));  // Second call - found after race condition
+
+        when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any(ProcessedInvoice.class)))
+            .thenThrow(new DataIntegrityViolationException("Duplicate key"));
+
+        // When
+        ProcessedInvoice result = service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "correlation-123");
+
+        // Then - should return the existing invoice
+        assertNotNull(result);
+        assertEquals("INV-001", result.getInvoiceNumber());
+        verify(invoiceRepository, times(2)).findBySourceInvoiceId("intake-123");
+        verify(invoiceRepository).save(any(ProcessedInvoice.class));
+        // Event should NOT be published in race condition case (invoice already exists)
+        verify(eventPublisher, never()).publishInvoiceProcessed(any());
+    }
+
+    @Test
+    void testProcessInvoiceForSagaRaceConditionMissingInvoiceThrowsException() throws Exception {
+        // Given - race condition but invoice not found after constraint violation (should not happen)
+        when(invoiceRepository.findBySourceInvoiceId("intake-123"))
+            .thenReturn(Optional.empty())
+            .thenReturn(Optional.empty());  // Still not found after race condition
+
+        when(parserService.parseInvoice(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any(ProcessedInvoice.class)))
+            .thenThrow(new DataIntegrityViolationException("Duplicate key"));
+
+        // When & Then - should throw IllegalStateException
+        assertThrows(IllegalStateException.class, () ->
+            service.processInvoiceForSaga("intake-123", "<xml>test</xml>", "correlation-123")
+        );
     }
 }

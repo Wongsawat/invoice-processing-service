@@ -9,6 +9,7 @@ import com.wpanther.invoice.processing.domain.service.InvoiceParserService;
 import com.wpanther.invoice.processing.infrastructure.messaging.EventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +53,10 @@ public class InvoiceProcessingService {
      * Process invoice as part of a saga command.
      * Parses XML, validates, calculates totals, saves to DB, publishes notification event.
      *
+     * <p>This method is idempotent - if the same documentId is processed concurrently,
+     * the unique constraint on source_invoice_id prevents duplicates. Any race condition
+     * is handled by catching DataIntegrityViolationException and returning the existing invoice.
+     *
      * @throws InvoiceParserService.InvoiceParsingException on parse failure
      */
     @Transactional
@@ -60,36 +65,54 @@ public class InvoiceProcessingService {
             throws InvoiceParserService.InvoiceParsingException {
         log.info("Processing invoice for saga, document: {}", documentId);
 
-        // Idempotency check
+        // Fast path: check if invoice already exists
         Optional<ProcessedInvoice> existing = invoiceRepository.findBySourceInvoiceId(documentId);
         if (existing.isPresent()) {
-            log.warn("Invoice already processed for document {}, returning existing", documentId);
+            log.debug("Invoice already processed for document {}, returning existing", documentId);
             return existing.get();
         }
 
-        // Parse XML to domain model
-        ProcessedInvoice invoice = parserService.parseInvoice(xmlContent, documentId);
+        try {
+            // Parse XML to domain model
+            ProcessedInvoice invoice = parserService.parseInvoice(xmlContent, documentId);
 
-        // State: PENDING → PROCESSING
-        invoice.startProcessing();
-        ProcessedInvoice saved = invoiceRepository.save(invoice);
-        log.info("Saved processed invoice: {}", saved.getInvoiceNumber());
+            // State: PENDING → PROCESSING
+            invoice.startProcessing();
+            ProcessedInvoice saved = invoiceRepository.save(invoice);
+            log.info("Saved processed invoice: {}", saved.getInvoiceNumber());
 
-        // State: PROCESSING → COMPLETED
-        saved.markCompleted();
-        invoiceRepository.save(saved);
+            // State: PROCESSING → COMPLETED
+            saved.markCompleted();
+            invoiceRepository.save(saved);
 
-        // Publish notification event for notification-service
-        InvoiceProcessedEvent processedEvent = new InvoiceProcessedEvent(
-            saved.getId().toString(),
-            saved.getInvoiceNumber(),
-            saved.getTotal().amount(),
-            saved.getCurrency(),
-            correlationId
-        );
-        eventPublisher.publishInvoiceProcessed(processedEvent);
+            // Publish notification event for notification-service
+            InvoiceProcessedEvent processedEvent = new InvoiceProcessedEvent(
+                saved.getId().toString(),
+                saved.getInvoiceNumber(),
+                saved.getTotal().amount(),
+                saved.getCurrency(),
+                correlationId
+            );
+            eventPublisher.publishInvoiceProcessed(processedEvent);
 
-        log.info("Successfully processed invoice for saga: {}", saved.getInvoiceNumber());
-        return saved;
+            log.info("Successfully processed invoice for saga: {}", saved.getInvoiceNumber());
+            return saved;
+
+        } catch (DataIntegrityViolationException e) {
+            // Race condition handling: another thread inserted the same invoice
+            // between our check and save attempt. Fetch and return the existing one.
+            log.info("Race condition detected for document {} - invoice was inserted by another transaction. Fetching existing invoice.",
+                    documentId);
+
+            Optional<ProcessedInvoice> existingInvoice = invoiceRepository.findBySourceInvoiceId(documentId);
+            if (existingInvoice.isPresent()) {
+                log.debug("Returning existing invoice after race condition for document: {}", documentId);
+                return existingInvoice.get();
+            }
+
+            // This should never happen if the unique constraint is working correctly
+            throw new IllegalStateException(
+                    "Invoice not found after constraint violation for document: " + documentId, e);
+        }
     }
 }
