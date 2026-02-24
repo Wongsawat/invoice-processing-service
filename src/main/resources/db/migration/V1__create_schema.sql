@@ -19,7 +19,7 @@ CREATE TABLE processed_invoices (
 
 CREATE INDEX idx_invoice_number ON processed_invoices(invoice_number);
 CREATE UNIQUE INDEX idx_invoice_number_unique ON processed_invoices(invoice_number);
-CREATE INDEX idx_source_invoice_id ON processed_invoices(source_invoice_id);
+CREATE UNIQUE INDEX idx_source_invoice_id ON processed_invoices(source_invoice_id);
 CREATE INDEX idx_status ON processed_invoices(status);
 CREATE INDEX idx_issue_date ON processed_invoices(issue_date);
 

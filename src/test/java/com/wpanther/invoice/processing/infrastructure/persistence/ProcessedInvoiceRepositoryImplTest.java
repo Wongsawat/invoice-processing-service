@@ -14,6 +14,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.dao.DataIntegrityViolationException;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -324,5 +326,41 @@ class ProcessedInvoiceRepositoryImplTest {
 
         // Then
         assertFalse(repository.findById(id).isPresent());
+    }
+
+    @Test
+    void save_whenDuplicateSourceInvoiceId_throwsDataIntegrityViolationException() {
+        // Given: original invoice already saved
+        repository.save(testInvoice);
+
+        // A second invoice with the same sourceInvoiceId (race condition loser)
+        Party seller = Party.of(
+            "Other Seller",
+            TaxIdentifier.of("1111111111", "VAT"),
+            new Address("999 Lane", "Phuket", "83000", "TH"),
+            null
+        );
+        Party buyer = Party.of(
+            "Other Buyer",
+            TaxIdentifier.of("2222222222", "VAT"),
+            new Address("888 Ave", "Pattaya", "20150", "TH"),
+            null
+        );
+        LineItem item = new LineItem("Other Service", 1, Money.of(500.00, "THB"), BigDecimal.ZERO);
+        ProcessedInvoice duplicate = ProcessedInvoice.builder()
+            .id(InvoiceId.generate())
+            .sourceInvoiceId("intake-test-123")   // same sourceInvoiceId as testInvoice
+            .invoiceNumber("INV-TEST-DUPLICATE")
+            .issueDate(LocalDate.of(2025, 3, 1))
+            .dueDate(LocalDate.of(2025, 4, 1))
+            .seller(seller)
+            .buyer(buyer)
+            .addItem(item)
+            .currency("THB")
+            .originalXml("<xml>duplicate</xml>")
+            .build();
+
+        // When / Then: unique constraint on source_invoice_id rejects the duplicate
+        assertThrows(DataIntegrityViolationException.class, () -> repository.save(duplicate));
     }
 }

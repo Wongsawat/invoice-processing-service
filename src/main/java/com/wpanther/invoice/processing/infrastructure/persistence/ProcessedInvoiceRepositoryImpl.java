@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Implementation of ProcessedInvoiceRepository using Spring Data JPA
@@ -36,9 +35,10 @@ public class ProcessedInvoiceRepositoryImpl implements ProcessedInvoiceRepositor
             existing.setStatus(invoice.getStatus());
             existing.setErrorMessage(invoice.getErrorMessage());
             existing.setCompletedAt(invoice.getCompletedAt());
-            jpaRepository.save(existing);
+            jpaRepository.saveAndFlush(existing);
         } else {
-            jpaRepository.save(mapper.toEntity(invoice));
+            ProcessedInvoiceEntity entity = mapper.toEntity(invoice);
+            jpaRepository.saveAndFlush(entity);
         }
 
         log.debug("Saved processed invoice: {} with ID: {}", invoice.getInvoiceNumber(), id);
@@ -79,7 +79,7 @@ public class ProcessedInvoiceRepositoryImpl implements ProcessedInvoiceRepositor
 
         return entities.stream()
             .map(mapper::toDomain)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override

@@ -15,12 +15,16 @@ import java.util.*;
  * JPA Entity for ProcessedInvoice aggregate
  */
 @Entity
-@Table(name = "processed_invoices", indexes = {
-    @Index(name = "idx_invoice_number", columnList = "invoice_number"),
-    @Index(name = "idx_source_invoice_id", columnList = "source_invoice_id"),
-    @Index(name = "idx_status", columnList = "status"),
-    @Index(name = "idx_issue_date", columnList = "issue_date")
-})
+@Table(name = "processed_invoices",
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uq_source_invoice_id", columnNames = "source_invoice_id")
+    },
+    indexes = {
+        @Index(name = "idx_invoice_number", columnList = "invoice_number"),
+        @Index(name = "idx_source_invoice_id", columnList = "source_invoice_id"),
+        @Index(name = "idx_status", columnList = "status"),
+        @Index(name = "idx_issue_date", columnList = "issue_date")
+    })
 @Getter
 @Setter
 @NoArgsConstructor
