@@ -1,11 +1,12 @@
-package com.wpanther.invoice.processing.domain.service;
+package com.wpanther.invoice.processing.domain.port.out;
 
 import com.wpanther.invoice.processing.domain.model.ProcessedInvoice;
 
 /**
- * Domain service for parsing XML invoices
+ * Outbound port — parsing contract for invoice XML.
+ * Domain dictates the contract; infrastructure provides the implementation.
  */
-public interface InvoiceParserService {
+public interface InvoiceParserPort {
 
     /**
      * Parse XML content into ProcessedInvoice domain model
@@ -15,7 +16,7 @@ public interface InvoiceParserService {
      * @return Parsed invoice domain model
      * @throws InvoiceParsingException if parsing fails
      */
-    ProcessedInvoice parseInvoice(String xmlContent, String sourceInvoiceId) throws InvoiceParsingException;
+    ProcessedInvoice parse(String xmlContent, String sourceInvoiceId) throws InvoiceParsingException;
 
     /**
      * Exception thrown when invoice parsing fails
