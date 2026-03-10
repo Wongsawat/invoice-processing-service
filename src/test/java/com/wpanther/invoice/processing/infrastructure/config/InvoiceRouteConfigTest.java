@@ -1,9 +1,9 @@
 package com.wpanther.invoice.processing.infrastructure.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wpanther.invoice.processing.application.service.SagaCommandHandler;
-import com.wpanther.invoice.processing.domain.event.CompensateInvoiceCommand;
-import com.wpanther.invoice.processing.domain.event.ProcessInvoiceCommand;
+import com.wpanther.invoice.processing.infrastructure.adapter.in.messaging.SagaCommandHandler;
+import com.wpanther.invoice.processing.infrastructure.adapter.in.messaging.dto.CompensateInvoiceCommand;
+import com.wpanther.invoice.processing.infrastructure.adapter.in.messaging.dto.ProcessInvoiceCommand;
 import com.wpanther.saga.domain.enums.SagaStep;
 import org.apache.camel.CamelContext;
 import org.apache.camel.ProducerTemplate;

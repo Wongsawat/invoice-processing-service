@@ -1,4 +1,4 @@
-package com.wpanther.invoice.processing.infrastructure.messaging;
+package com.wpanther.invoice.processing.infrastructure.adapter.out.messaging;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

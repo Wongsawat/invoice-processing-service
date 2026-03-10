@@ -3,7 +3,7 @@ package com.wpanther.invoice.processing.infrastructure.persistence;
 import com.wpanther.invoice.processing.domain.model.InvoiceId;
 import com.wpanther.invoice.processing.domain.model.ProcessedInvoice;
 import com.wpanther.invoice.processing.domain.model.ProcessingStatus;
-import com.wpanther.invoice.processing.domain.repository.ProcessedInvoiceRepository;
+import com.wpanther.invoice.processing.domain.port.out.ProcessedInvoiceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;

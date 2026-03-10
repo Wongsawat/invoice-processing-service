@@ -1,7 +1,7 @@
 package com.wpanther.invoice.processing.infrastructure.service;
 
 import com.wpanther.invoice.processing.domain.model.*;
-import com.wpanther.invoice.processing.domain.service.InvoiceParserService;
+import com.wpanther.invoice.processing.domain.port.out.InvoiceParserPort;
 import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.Unmarshaller;
@@ -26,7 +26,7 @@ import static org.mockito.Mockito.*;
  */
 class InvoiceParserServiceImplTest {
 
-    private InvoiceParserService parserService;
+    private InvoiceParserPort parserService;
 
     @BeforeEach
     void setUp() {
@@ -55,9 +55,9 @@ class InvoiceParserServiceImplTest {
 
             InvoiceParserServiceImpl service = new InvoiceParserServiceImpl();
 
-            InvoiceParserService.InvoiceParsingException ex = assertThrows(
-                InvoiceParserService.InvoiceParsingException.class,
-                () -> service.parseInvoice("<test/>", "test-id")
+            InvoiceParserPort.InvoiceParsingException ex = assertThrows(
+                InvoiceParserPort.InvoiceParsingException.class,
+                () -> service.parse("<test/>", "test-id")
             );
             assertTrue(ex.getMessage().contains("Unexpected root element"));
         }
@@ -71,9 +71,9 @@ class InvoiceParserServiceImplTest {
             + "<foo>&xxe;</foo>";
 
         // When/Then: parsing must be rejected before any external resource is accessed
-        InvoiceParserService.InvoiceParsingException ex = assertThrows(
-            InvoiceParserService.InvoiceParsingException.class,
-            () -> parserService.parseInvoice(xxeXml, "attack-id")
+        InvoiceParserPort.InvoiceParsingException ex = assertThrows(
+            InvoiceParserPort.InvoiceParsingException.class,
+            () -> parserService.parse(xxeXml, "attack-id")
         );
         assertTrue(ex.getMessage().contains("Failed to parse XML")
             || ex.getMessage().contains("DOCTYPE"),
@@ -81,13 +81,13 @@ class InvoiceParserServiceImplTest {
     }
 
     @Test
-    void testParseValidInvoice() throws InvoiceParserService.InvoiceParsingException {
+    void testParseValidInvoice() throws InvoiceParserPort.InvoiceParsingException {
         // Given: A valid Thai e-Tax invoice XML
         String xmlContent = getSampleInvoiceXml();
         String sourceInvoiceId = "intake-12345";
 
         // When: Parsing the XML
-        ProcessedInvoice invoice = parserService.parseInvoice(xmlContent, sourceInvoiceId);
+        ProcessedInvoice invoice = parserService.parse(xmlContent, sourceInvoiceId);
 
         // Then: All fields should be correctly parsed
         assertNotNull(invoice);
@@ -101,12 +101,12 @@ class InvoiceParserServiceImplTest {
     }
 
     @Test
-    void testParseSellerInformation() throws InvoiceParserService.InvoiceParsingException {
+    void testParseSellerInformation() throws InvoiceParserPort.InvoiceParsingException {
         // Given: A valid invoice XML
         String xmlContent = getSampleInvoiceXml();
 
         // When: Parsing the XML
-        ProcessedInvoice invoice = parserService.parseInvoice(xmlContent, "test-123");
+        ProcessedInvoice invoice = parserService.parse(xmlContent, "test-123");
 
         // Then: Seller information should be correctly parsed
         Party seller = invoice.getSeller();
@@ -124,12 +124,12 @@ class InvoiceParserServiceImplTest {
     }
 
     @Test
-    void testParseBuyerInformation() throws InvoiceParserService.InvoiceParsingException {
+    void testParseBuyerInformation() throws InvoiceParserPort.InvoiceParsingException {
         // Given: A valid invoice XML
         String xmlContent = getSampleInvoiceXml();
 
         // When: Parsing the XML
-        ProcessedInvoice invoice = parserService.parseInvoice(xmlContent, "test-123");
+        ProcessedInvoice invoice = parserService.parse(xmlContent, "test-123");
 
         // Then: Buyer information should be correctly parsed
         Party buyer = invoice.getBuyer();
@@ -146,12 +146,12 @@ class InvoiceParserServiceImplTest {
     }
 
     @Test
-    void testParseLineItems() throws InvoiceParserService.InvoiceParsingException {
+    void testParseLineItems() throws InvoiceParserPort.InvoiceParsingException {
         // Given: A valid invoice XML with line items
         String xmlContent = getSampleInvoiceXml();
 
         // When: Parsing the XML
-        ProcessedInvoice invoice = parserService.parseInvoice(xmlContent, "test-123");
+        ProcessedInvoice invoice = parserService.parse(xmlContent, "test-123");
 
         // Then: Line items should be correctly parsed
         assertNotNull(invoice.getItems());
@@ -173,12 +173,12 @@ class InvoiceParserServiceImplTest {
     }
 
     @Test
-    void testCalculateTotals() throws InvoiceParserService.InvoiceParsingException {
+    void testCalculateTotals() throws InvoiceParserPort.InvoiceParsingException {
         // Given: A valid invoice XML
         String xmlContent = getSampleInvoiceXml();
 
         // When: Parsing the XML
-        ProcessedInvoice invoice = parserService.parseInvoice(xmlContent, "test-123");
+        ProcessedInvoice invoice = parserService.parse(xmlContent, "test-123");
 
         // Then: Totals should be calculated correctly
         // Subtotal: (10 * 5000) + (1 * 10000) = 60,000
@@ -197,8 +197,8 @@ class InvoiceParserServiceImplTest {
         String xmlContent = null;
 
         // When/Then: Should throw InvoiceParsingException
-        assertThrows(InvoiceParserService.InvoiceParsingException.class,
-            () -> parserService.parseInvoice(xmlContent, "test-123"));
+        assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+            () -> parserService.parse(xmlContent, "test-123"));
     }
 
     @Test
@@ -207,8 +207,8 @@ class InvoiceParserServiceImplTest {
         String xmlContent = "";
 
         // When/Then: Should throw InvoiceParsingException
-        assertThrows(InvoiceParserService.InvoiceParsingException.class,
-            () -> parserService.parseInvoice(xmlContent, "test-123"));
+        assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+            () -> parserService.parse(xmlContent, "test-123"));
     }
 
     @Test
@@ -217,8 +217,8 @@ class InvoiceParserServiceImplTest {
         String xmlContent = "<invalid>Not a valid invoice</invalid>";
 
         // When/Then: Should throw InvoiceParsingException
-        assertThrows(InvoiceParserService.InvoiceParsingException.class,
-            () -> parserService.parseInvoice(xmlContent, "test-123"));
+        assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+            () -> parserService.parse(xmlContent, "test-123"));
     }
 
     @Test
@@ -227,9 +227,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithoutInvoiceNumber();
 
         // When/Then: Should throw InvoiceParsingException
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("Invoice number"));
     }
@@ -240,20 +240,20 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithoutLineItems();
 
         // When/Then: Should throw InvoiceParsingException
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("line item"));
     }
 
     @Test
-    void testParseInvoiceWithMissingDueDate() throws InvoiceParserService.InvoiceParsingException {
+    void testParseInvoiceWithMissingDueDate() throws InvoiceParserPort.InvoiceParsingException {
         // Given: XML without due date (should default to issue date + 30 days)
         String xmlContent = getInvoiceXmlWithoutDueDate();
 
         // When: Parsing the XML
-        ProcessedInvoice invoice = parserService.parseInvoice(xmlContent, "test-123");
+        ProcessedInvoice invoice = parserService.parse(xmlContent, "test-123");
 
         // Then: Due date should be issue date + 30 days
         assertNotNull(invoice);
@@ -262,12 +262,12 @@ class InvoiceParserServiceImplTest {
     }
 
     @Test
-    void testParseInvoiceWithMinimalAddress() throws InvoiceParserService.InvoiceParsingException {
+    void testParseInvoiceWithMinimalAddress() throws InvoiceParserPort.InvoiceParsingException {
         // Given: XML with minimal address (only country required)
         String xmlContent = getInvoiceXmlWithMinimalAddress();
 
         // When: Parsing the XML
-        ProcessedInvoice invoice = parserService.parseInvoice(xmlContent, "test-123");
+        ProcessedInvoice invoice = parserService.parse(xmlContent, "test-123");
 
         // Then: Address should have only country
         assertNotNull(invoice);
@@ -280,12 +280,12 @@ class InvoiceParserServiceImplTest {
     }
 
     @Test
-    void testParseInvoiceWithTaxIdNoScheme() throws InvoiceParserService.InvoiceParsingException {
+    void testParseInvoiceWithTaxIdNoScheme() throws InvoiceParserPort.InvoiceParsingException {
         // Given: XML with tax ID but no scheme (should default to "VAT")
         String xmlContent = getInvoiceXmlWithTaxIdNoScheme();
 
         // When: Parsing the XML
-        ProcessedInvoice invoice = parserService.parseInvoice(xmlContent, "test-123");
+        ProcessedInvoice invoice = parserService.parse(xmlContent, "test-123");
 
         // Then: Tax scheme should default to "VAT"
         assertNotNull(invoice);
@@ -299,9 +299,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithoutIssueDate();
 
         // When/Then: Should throw InvoiceParsingException
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("Issue date"));
     }
@@ -312,9 +312,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithoutSeller();
 
         // When/Then: Should throw InvoiceParsingException
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("Seller"));
     }
@@ -325,9 +325,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithoutBuyer();
 
         // When/Then: Should throw InvoiceParsingException
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("Buyer"));
     }
@@ -338,9 +338,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithInvalidCurrency();
 
         // When/Then: Should throw InvoiceParsingException
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("currency"));
     }
@@ -351,20 +351,20 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithoutCurrency();
 
         // When/Then: Should throw InvoiceParsingException
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("currency"));
     }
 
     @Test
-    void testParseInvoiceWithLineItemMissingTax() throws InvoiceParserService.InvoiceParsingException {
+    void testParseInvoiceWithLineItemMissingTax() throws InvoiceParserPort.InvoiceParsingException {
         // Given: XML with line item without tax info (should default to 0%)
         String xmlContent = getInvoiceXmlWithLineItemNoTax();
 
         // When: Parsing the XML
-        ProcessedInvoice invoice = parserService.parseInvoice(xmlContent, "test-123");
+        ProcessedInvoice invoice = parserService.parse(xmlContent, "test-123");
 
         // Then: Tax rate should be zero
         assertNotNull(invoice);
@@ -378,9 +378,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithoutSellerName();
 
         // When/Then: Should throw InvoiceParsingException
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("Seller name"));
     }
@@ -391,9 +391,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithoutSellerTaxId();
 
         // When/Then: Should throw InvoiceParsingException
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("Seller tax"));
     }
@@ -404,9 +404,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithoutSellerCountry();
 
         // When/Then: Should throw InvoiceParsingException
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("Seller country"));
     }
@@ -1162,10 +1162,10 @@ class InvoiceParserServiceImplTest {
     }
 
     @Test
-    void testParseInvoiceWithSellerEmail() throws InvoiceParserService.InvoiceParsingException {
+    void testParseInvoiceWithSellerEmail() throws InvoiceParserPort.InvoiceParsingException {
         String xmlContent = getInvoiceXmlWithSellerEmail();
 
-        ProcessedInvoice invoice = parserService.parseInvoice(xmlContent, "test-123");
+        ProcessedInvoice invoice = parserService.parse(xmlContent, "test-123");
 
         assertNotNull(invoice);
         Party seller = invoice.getSeller();
@@ -1178,9 +1178,9 @@ class InvoiceParserServiceImplTest {
     void testParseInvoiceWithDecimalQuantity() {
         String xmlContent = getInvoiceXmlWithDecimalQuantity();
 
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("whole number") || exception.getMessage().contains("1"));
     }
@@ -1189,9 +1189,9 @@ class InvoiceParserServiceImplTest {
     void testParseInvoiceWithMissingExchangedDocument() {
         String xmlContent = getInvoiceXmlWithoutExchangedDocument();
 
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("ExchangedDocument")
             || exception.getMessage() != null);
@@ -1382,9 +1382,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithoutSupplyChainTradeTransaction();
 
         // When/Then: Should throw InvoiceParsingException mentioning SupplyChainTradeTransaction
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("SupplyChainTradeTransaction"));
     }
@@ -1395,9 +1395,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithEmptyTaxRegistration();
 
         // When/Then: Should throw InvoiceParsingException about missing tax ID
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("tax"));
     }
@@ -1408,9 +1408,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithMissingSellerPostalAddress();
 
         // When/Then: Should throw InvoiceParsingException about missing seller address
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("address") || exception.getMessage().contains("Seller"));
     }
@@ -1421,9 +1421,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithMissingProductName();
 
         // When/Then: Should throw InvoiceParsingException about missing product name
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("product name") || exception.getMessage().contains("line item"));
     }
@@ -1434,9 +1434,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithMissingLineDelivery();
 
         // When/Then: Should throw InvoiceParsingException about missing quantity
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("quantity") || exception.getMessage().contains("line item"));
     }
@@ -1447,9 +1447,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithMissingLineAgreement();
 
         // When/Then: Should throw InvoiceParsingException about missing unit price
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("price") || exception.getMessage().contains("line item"));
     }
@@ -1460,9 +1460,9 @@ class InvoiceParserServiceImplTest {
         String xmlContent = getInvoiceXmlWithEmptyChargeAmount();
 
         // When/Then: Should throw InvoiceParsingException about missing price amount
-        InvoiceParserService.InvoiceParsingException exception =
-            assertThrows(InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice(xmlContent, "test-123"));
+        InvoiceParserPort.InvoiceParsingException exception =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
 
         assertTrue(exception.getMessage().contains("price amount") || exception.getMessage().contains("line item"));
     }
@@ -1879,9 +1879,9 @@ class InvoiceParserServiceImplTest {
             doThrow(new ParserConfigurationException("Simulated config failure"))
                 .when(mockFactory).setFeature(anyString(), anyBoolean());
 
-            InvoiceParserService.InvoiceParsingException ex = assertThrows(
-                InvoiceParserService.InvoiceParsingException.class,
-                () -> parserService.parseInvoice("<xml>test</xml>", "test-id")
+            InvoiceParserPort.InvoiceParsingException ex = assertThrows(
+                InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse("<xml>test</xml>", "test-id")
             );
             assertTrue(ex.getMessage().contains("Failed to configure XML parser"));
         }

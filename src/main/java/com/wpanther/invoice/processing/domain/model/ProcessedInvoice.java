@@ -1,5 +1,8 @@
 package com.wpanther.invoice.processing.domain.model;
 
+import com.wpanther.invoice.processing.domain.event.InvoiceProcessedDomainEvent;
+
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -42,6 +45,9 @@ public class ProcessedInvoice {
     private LocalDateTime createdAt;
     private LocalDateTime completedAt;
     private String errorMessage;
+
+    // Domain events raised during aggregate lifecycle
+    private final List<Object> domainEvents = new ArrayList<>();
 
     // Cached totals (calculated on demand)
     private transient Money cachedSubtotal;
@@ -140,14 +146,24 @@ public class ProcessedInvoice {
     }
 
     /**
-     * Mark invoice processing as completed
+     * Mark invoice processing as completed.
+     * Raises InvoiceProcessedDomainEvent.
+     *
+     * @param correlationId The saga correlation ID for event tracing
      */
-    public void markCompleted() {
+    public void markCompleted(String correlationId) {
         if (status != ProcessingStatus.PROCESSING) {
             throw new IllegalStateException("Can only complete from PROCESSING status");
         }
         this.status = ProcessingStatus.COMPLETED;
         this.completedAt = LocalDateTime.now();
+        domainEvents.add(new InvoiceProcessedDomainEvent(
+            this.id,
+            this.invoiceNumber,
+            this.getTotal(),
+            correlationId,
+            Instant.now()
+        ));
     }
 
     /**
@@ -157,6 +173,20 @@ public class ProcessedInvoice {
         this.status = ProcessingStatus.FAILED;
         this.errorMessage = errorMessage;
         this.completedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Returns an unmodifiable view of domain events raised since last clear.
+     */
+    public List<Object> domainEvents() {
+        return Collections.unmodifiableList(domainEvents);
+    }
+
+    /**
+     * Clears all domain events. Call after the application layer has processed them.
+     */
+    public void clearDomainEvents() {
+        domainEvents.clear();
     }
 
     // Getters

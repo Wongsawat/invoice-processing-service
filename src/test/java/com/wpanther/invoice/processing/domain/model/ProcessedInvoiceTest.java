@@ -9,7 +9,11 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.wpanther.invoice.processing.domain.event.InvoiceProcessedDomainEvent;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for ProcessedInvoice aggregate root
@@ -165,7 +169,7 @@ class ProcessedInvoiceTest {
         invoice.startProcessing();
 
         // When
-        invoice.markCompleted();
+        invoice.markCompleted("test-correlation");
 
         // Then
         assertEquals(ProcessingStatus.COMPLETED, invoice.getStatus());
@@ -178,7 +182,7 @@ class ProcessedInvoiceTest {
         ProcessedInvoice invoice = validInvoiceBuilder.build();
 
         // When/Then
-        assertThrows(IllegalStateException.class, invoice::markCompleted);
+        assertThrows(IllegalStateException.class, () -> invoice.markCompleted("test-correlation"));
     }
 
     @Test
@@ -397,7 +401,7 @@ class ProcessedInvoiceTest {
         invoice.startProcessing();
         assertEquals(ProcessingStatus.PROCESSING, invoice.getStatus());
 
-        invoice.markCompleted();
+        invoice.markCompleted("test-correlation");
         assertEquals(ProcessingStatus.COMPLETED, invoice.getStatus());
         assertNotNull(invoice.getCompletedAt());
     }
@@ -449,5 +453,41 @@ class ProcessedInvoiceTest {
         assertNotNull(invoice.getCreatedAt());
         assertNull(invoice.getCompletedAt());
         assertNull(invoice.getErrorMessage());
+    }
+
+    @Test
+    void markCompleted_shouldRaiseInvoiceProcessedDomainEvent() {
+        ProcessedInvoice invoice = validInvoiceBuilder.build();
+        invoice.startProcessing();
+
+        invoice.markCompleted("corr-abc");
+
+        assertThat(invoice.domainEvents()).hasSize(1);
+        InvoiceProcessedDomainEvent event =
+            (InvoiceProcessedDomainEvent) invoice.domainEvents().get(0);
+        assertThat(event.invoiceId()).isEqualTo(invoice.getId());
+        assertThat(event.correlationId()).isEqualTo("corr-abc");
+        assertThat(event.invoiceNumber()).isEqualTo(invoice.getInvoiceNumber());
+        assertThat(event.occurredAt()).isNotNull();
+    }
+
+    @Test
+    void clearDomainEvents_shouldEmptyTheList() {
+        ProcessedInvoice invoice = validInvoiceBuilder.build();
+        invoice.startProcessing();
+        invoice.markCompleted("corr-xyz");
+        assertThat(invoice.domainEvents()).hasSize(1);
+
+        invoice.clearDomainEvents();
+
+        assertThat(invoice.domainEvents()).isEmpty();
+    }
+
+    @Test
+    void domainEvents_shouldBeUnmodifiable() {
+        ProcessedInvoice invoice = validInvoiceBuilder.build();
+
+        assertThatThrownBy(() -> invoice.domainEvents().add(new Object()))
+            .isInstanceOf(UnsupportedOperationException.class);
     }
 }

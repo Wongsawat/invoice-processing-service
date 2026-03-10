@@ -7,7 +7,7 @@ import com.wpanther.invoice.processing.domain.model.Money;
 import com.wpanther.invoice.processing.domain.model.Party;
 import com.wpanther.invoice.processing.domain.model.ProcessedInvoice;
 import com.wpanther.invoice.processing.domain.model.TaxIdentifier;
-import com.wpanther.invoice.processing.domain.service.InvoiceParserService;
+import com.wpanther.invoice.processing.domain.port.out.InvoiceParserPort;
 import com.wpanther.etax.generated.invoice.ram.*;
 import com.wpanther.etax.generated.invoice.rsm.Invoice_CrossIndustryInvoiceType;
 import jakarta.xml.bind.JAXBContext;
@@ -37,7 +37,7 @@ import java.util.Optional;
  */
 @Slf4j
 @Service
-public class InvoiceParserServiceImpl implements InvoiceParserService {
+public class InvoiceParserServiceImpl implements InvoiceParserPort {
 
     private final JAXBContext jaxbContext;
 
@@ -59,7 +59,7 @@ public class InvoiceParserServiceImpl implements InvoiceParserService {
     }
 
     @Override
-    public ProcessedInvoice parseInvoice(String xmlContent, String sourceInvoiceId)
+    public ProcessedInvoice parse(String xmlContent, String sourceInvoiceId)
             throws InvoiceParsingException {
 
         log.debug("Starting XML parsing for source invoice ID: {}", sourceInvoiceId);

@@ -1,7 +1,7 @@
 package com.wpanther.invoice.processing.infrastructure.persistence;
 
 import com.wpanther.invoice.processing.domain.model.*;
-import com.wpanther.invoice.processing.domain.repository.ProcessedInvoiceRepository;
+import com.wpanther.invoice.processing.domain.port.out.ProcessedInvoiceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -250,7 +250,7 @@ class ProcessedInvoiceRepositoryImplTest {
         saved.startProcessing();
         repository.save(saved);
 
-        saved.markCompleted();
+        saved.markCompleted("test-correlation");
         ProcessedInvoice finalInvoice = repository.save(saved);
 
         // Then
