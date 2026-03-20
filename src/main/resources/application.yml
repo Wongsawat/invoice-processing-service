@@ -57,6 +57,11 @@ camel:
       
 # Application-specific configuration
 app:
+  outbox:
+    cleanup:
+      retention-days: 7
+      cron: "0 0 2 * * *"
+
   kafka:
     bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
     topics:
