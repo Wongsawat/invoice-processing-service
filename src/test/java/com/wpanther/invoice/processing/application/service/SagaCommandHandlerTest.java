@@ -64,7 +64,7 @@ class SagaCommandHandlerTest {
     }
 
     @Test
-    void shouldDelegateToCompensateInvoiceUseCase() {
+    void shouldDelegateToCompensateInvoiceUseCase() throws Exception {
         // Given
         CompensateInvoiceCommand command = new CompensateInvoiceCommand(
             "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "process-invoice", "doc-001", "invoice"
@@ -85,19 +85,34 @@ class SagaCommandHandlerTest {
     }
 
     @Test
-    void shouldPropagateExceptionFromProcessUseCase() throws Exception {
-        // Given
+    void shouldSwallowInvoiceProcessingExceptionFromProcessUseCase() throws Exception {
+        // Given — use case committed FAILURE reply and throws InvoiceProcessingException
         ProcessInvoiceCommand command = new ProcessInvoiceCommand(
             "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "doc-001", "<xml/>", "INV-001"
         );
-        doThrow(new RuntimeException("Processing error"))
+        doThrow(new ProcessInvoiceUseCase.InvoiceProcessingException("Parse failed"))
             .when(processInvoiceUseCase).process(any(), any(), any(), any(), any());
 
-        // When/Then - exception propagates
+        // When/Then — handler catches it and returns normally; Kafka offset is committed
+        sagaCommandHandler.handleProcessCommand(command);
+
+        verify(processInvoiceUseCase).process(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldPropagateUnexpectedExceptionFromProcessUseCase() throws Exception {
+        // Given — unexpected runtime exception (e.g., outbox write failed before reply committed)
+        ProcessInvoiceCommand command = new ProcessInvoiceCommand(
+            "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "doc-001", "<xml/>", "INV-001"
+        );
+        doThrow(new RuntimeException("Unexpected DB outage"))
+            .when(processInvoiceUseCase).process(any(), any(), any(), any(), any());
+
+        // When/Then — propagates to Camel DLC for retry
         try {
             sagaCommandHandler.handleProcessCommand(command);
         } catch (RuntimeException e) {
-            // Expected
+            // Expected — Camel DLC retries the message
         }
 
         verify(processInvoiceUseCase).process(any(), any(), any(), any(), any());
@@ -105,17 +120,18 @@ class SagaCommandHandlerTest {
 
     @Test
     void shouldPropagateExceptionFromCompensateUseCase() {
-        // Given
+        // Given — compensation failed; publishFailure already committed via REQUIRES_NEW
         CompensateInvoiceCommand command = new CompensateInvoiceCommand(
             "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "process-invoice", "doc-001", "invoice"
         );
-        doThrow(new RuntimeException("Compensation error"))
+        doThrow(new CompensateInvoiceUseCase.InvoiceCompensationException(
+                "Compensation error", new RuntimeException("DB error")))
             .when(compensateInvoiceUseCase).compensate(any(), any(), any(), any());
 
-        // When/Then - exception propagates
+        // When/Then — propagates to Camel DLC for retry (deleteById is idempotent)
         try {
             sagaCommandHandler.handleCompensation(command);
-        } catch (RuntimeException e) {
+        } catch (CompensateInvoiceUseCase.InvoiceCompensationException e) {
             // Expected
         }
 

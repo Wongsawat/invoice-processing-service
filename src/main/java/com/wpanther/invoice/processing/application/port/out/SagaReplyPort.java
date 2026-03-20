@@ -1,44 +1,44 @@
 package com.wpanther.invoice.processing.application.port.out;
 
 import com.wpanther.saga.domain.enums.SagaStep;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Outbound port for publishing saga replies to the orchestrator.
- * Replies are published via the transactional outbox pattern for exactly-once delivery.
- * Implementations MUST require an active transaction (@Transactional(MANDATORY)).
+ * Outbound port for publishing saga reply events.
+ * Implemented by infrastructure adapters that send replies to the saga orchestrator
+ * via the transactional outbox pattern for exactly-once delivery.
  */
 public interface SagaReplyPort {
 
     /**
-     * Publish a saga reply indicating successful completion.
+     * Publish a SUCCESS reply to the saga orchestrator.
+     * Must be called within an active transaction (adapter uses {@code MANDATORY} propagation).
      *
-     * @param sagaId the saga instance ID
-     * @param sagaStep the step that completed
-     * @param correlationId for tracing
+     * @param sagaId        saga instance identifier
+     * @param sagaStep      the step that completed successfully
+     * @param correlationId end-to-end correlation ID for tracing
      */
-    @Transactional(propagation = Propagation.MANDATORY)
     void publishSuccess(String sagaId, SagaStep sagaStep, String correlationId);
 
     /**
-     * Publish a saga reply indicating failure.
+     * Publish a FAILURE reply to the saga orchestrator, triggering compensation.
+     * Uses {@code REQUIRES_NEW} propagation — commits in its own independent transaction
+     * even when the caller's transaction is marked {@code ROLLBACK_ONLY} or the Hibernate
+     * session is in an invalid state after a DB error.
      *
-     * @param sagaId the saga instance ID
-     * @param sagaStep the step that failed
-     * @param correlationId for tracing
-     * @param errorMessage error details
+     * @param sagaId        saga instance identifier
+     * @param sagaStep      the step that failed
+     * @param correlationId end-to-end correlation ID for tracing
+     * @param errorMessage  human-readable failure description forwarded to the orchestrator
      */
-    @Transactional(propagation = Propagation.MANDATORY)
     void publishFailure(String sagaId, SagaStep sagaStep, String correlationId, String errorMessage);
 
     /**
-     * Publish a saga reply indicating successful compensation (rollback).
+     * Publish a COMPENSATED reply to the saga orchestrator after a rollback.
+     * Must be called within an active transaction (adapter uses {@code MANDATORY} propagation).
      *
-     * @param sagaId the saga instance ID
-     * @param sagaStep the step that was compensated
-     * @param correlationId for tracing
+     * @param sagaId        saga instance identifier
+     * @param sagaStep      the step that was compensated
+     * @param correlationId end-to-end correlation ID for tracing
      */
-    @Transactional(propagation = Propagation.MANDATORY)
     void publishCompensated(String sagaId, SagaStep sagaStep, String correlationId);
 }

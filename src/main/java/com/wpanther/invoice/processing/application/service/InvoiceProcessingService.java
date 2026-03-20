@@ -39,7 +39,8 @@ public class InvoiceProcessingService
     @Override
     @Transactional
     public void process(String documentId, String xmlContent,
-                        String sagaId, SagaStep sagaStep, String correlationId) {
+                        String sagaId, SagaStep sagaStep, String correlationId)
+            throws InvoiceProcessingException {
         log.info("Processing invoice for saga={} document={}", sagaId, documentId);
         try {
             if (invoiceRepository.findBySourceInvoiceId(documentId).isPresent()) {
@@ -74,7 +75,14 @@ public class InvoiceProcessingService
         } catch (Exception e) {
             log.error("Failed to process invoice for saga={} document={}: {}",
                 sagaId, documentId, e.getMessage(), e);
-            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, e.getMessage());
+            // publishFailure uses REQUIRES_NEW — commits independently even if the outer
+            // transaction is ROLLBACK_ONLY (e.g. after a DB error from save above).
+            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
+                "Processing error for document " + documentId + ": " + e);
+            // Throw so the caller (SagaCommandHandler) knows the FAILURE reply was committed
+            // and can return normally to Camel, committing the Kafka offset without retrying.
+            throw new InvoiceProcessingException(
+                "Failed to process invoice " + documentId + ": " + e, e);
         }
     }
 
@@ -83,15 +91,30 @@ public class InvoiceProcessingService
     public void compensate(String documentId, String sagaId,
                            SagaStep sagaStep, String correlationId) {
         log.info("Compensating invoice for saga={} document={}", sagaId, documentId);
-        invoiceRepository.findBySourceInvoiceId(documentId)
-            .ifPresentOrElse(
-                invoice -> {
-                    invoiceRepository.deleteById(invoice.getId());
-                    log.info("Deleted ProcessedInvoice id={} for compensation", invoice.getId());
-                },
-                () -> log.info("No invoice found for document={} — already compensated or never processed", documentId)
-            );
-        sagaReplyPort.publishCompensated(sagaId, sagaStep, correlationId);
+
+        try {
+            invoiceRepository.findBySourceInvoiceId(documentId)
+                .ifPresentOrElse(
+                    invoice -> {
+                        invoiceRepository.deleteById(invoice.getId());
+                        log.info("Deleted ProcessedInvoice id={} for compensation", invoice.getId());
+                    },
+                    () -> log.info("No invoice found for document={} — already compensated or never processed",
+                        documentId)
+                );
+
+            sagaReplyPort.publishCompensated(sagaId, sagaStep, correlationId);
+        } catch (Exception e) {
+            log.error("Failed to compensate invoice for saga={}: {}", sagaId, e.toString(), e);
+            // publishFailure uses REQUIRES_NEW — commits in its own transaction even though
+            // the outer @Transactional is rolling back.
+            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
+                "Compensation failed: " + e);
+            // Rethrow so Camel receives a clean exception and triggers DLC retry.
+            // deleteById is idempotent (no-op if entity is absent), so retries are safe.
+            throw new InvoiceCompensationException(
+                "Compensation failed for document " + documentId, e);
+        }
     }
 
     @Transactional(readOnly = true)

@@ -1,5 +1,7 @@
 package com.wpanther.invoice.processing.application.service;
 
+import com.wpanther.invoice.processing.application.port.in.CompensateInvoiceUseCase;
+import com.wpanther.invoice.processing.application.port.in.ProcessInvoiceUseCase;
 import com.wpanther.invoice.processing.application.port.out.InvoiceEventPublishingPort;
 import com.wpanther.invoice.processing.application.port.out.SagaReplyPort;
 import com.wpanther.invoice.processing.domain.event.InvoiceProcessedDomainEvent;
@@ -22,8 +24,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -281,11 +282,15 @@ class InvoiceProcessingServiceTest {
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
         when(parserService.parse(anyString(), anyString())).thenThrow(new RuntimeException("Parse error"));
 
-        // When
-        service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_INVOICE, "correlation-123");
+        // When — process() commits FAILURE reply then throws InvoiceProcessingException
+        assertThrows(ProcessInvoiceUseCase.InvoiceProcessingException.class, () ->
+            service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_INVOICE, "correlation-123")
+        );
 
-        // Then
-        verify(sagaReplyPort).publishFailure("saga-1", SagaStep.PROCESS_INVOICE, "correlation-123", "Parse error");
+        // Then — FAILURE reply was published before the exception was thrown
+        verify(sagaReplyPort).publishFailure(eq("saga-1"), eq(SagaStep.PROCESS_INVOICE),
+            eq("correlation-123"), anyString());
+        verify(sagaReplyPort, never()).publishSuccess(any(), any(), any());
     }
 
     @Test
@@ -314,5 +319,22 @@ class InvoiceProcessingServiceTest {
         verify(invoiceRepository).findBySourceInvoiceId("intake-123");
         verify(invoiceRepository, never()).deleteById(any());
         verify(sagaReplyPort).publishCompensated("saga-1", SagaStep.PROCESS_INVOICE, "correlation-123");
+    }
+
+    @Test
+    void testCompensatePublishesFailureAndThrowsWhenExceptionOccurs() {
+        // Given — deleteById throws a runtime exception
+        when(invoiceRepository.findBySourceInvoiceId("intake-123")).thenReturn(Optional.of(validInvoice));
+        doThrow(new RuntimeException("DB error")).when(invoiceRepository).deleteById(any());
+
+        // When — compensate() commits FAILURE reply then throws InvoiceCompensationException
+        assertThrows(CompensateInvoiceUseCase.InvoiceCompensationException.class, () ->
+            service.compensate("intake-123", "saga-1", SagaStep.PROCESS_INVOICE, "correlation-123")
+        );
+
+        // Then — FAILURE reply was published before the exception was thrown
+        verify(sagaReplyPort).publishFailure(eq("saga-1"), eq(SagaStep.PROCESS_INVOICE),
+            eq("correlation-123"), anyString());
+        verify(sagaReplyPort, never()).publishCompensated(any(), any(), any());
     }
 }
