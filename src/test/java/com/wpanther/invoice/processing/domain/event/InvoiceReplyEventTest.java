@@ -1,6 +1,7 @@
 package com.wpanther.invoice.processing.domain.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wpanther.invoice.processing.infrastructure.adapter.out.messaging.dto.InvoiceReplyEvent;
 import com.wpanther.saga.domain.enums.ReplyStatus;
 import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.Test;

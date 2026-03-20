@@ -1,6 +1,6 @@
 package com.wpanther.invoice.processing.infrastructure.adapter.out.messaging;
 
-import com.wpanther.invoice.processing.domain.event.InvoiceReplyEvent;
+import com.wpanther.invoice.processing.infrastructure.adapter.out.messaging.dto.InvoiceReplyEvent;
 import com.wpanther.invoice.processing.application.port.out.SagaReplyPort;
 import com.wpanther.invoice.processing.infrastructure.config.KafkaTopicsProperties;
 import com.wpanther.saga.domain.enums.SagaStep;

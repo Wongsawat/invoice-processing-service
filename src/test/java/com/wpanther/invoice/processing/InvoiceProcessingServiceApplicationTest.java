@@ -35,10 +35,10 @@ class InvoiceProcessingServiceApplicationTest {
     void testApplicationHasRequiredBeans() {
         assertTrue(applicationContext.containsBean("invoiceProcessingService"),
             "Should have InvoiceProcessingService bean");
-        assertTrue(applicationContext.containsBean("eventPublisher"),
-            "Should have EventPublisher bean");
-        assertTrue(applicationContext.containsBean("invoiceRouteConfig"),
-            "Should have InvoiceRouteConfig bean");
+        assertTrue(applicationContext.containsBean("invoiceEventPublisher"),
+            "Should have InvoiceEventPublisher bean");
+        assertTrue(applicationContext.containsBean("sagaRouteConfig"),
+            "Should have SagaRouteConfig bean");
         assertTrue(applicationContext.containsBean("producerTemplate"),
             "Should have ProducerTemplate bean");
     }

@@ -25,7 +25,7 @@
         <teda.version>1.0.0</teda.version>
         <saga.commons.version>1.0.0-SNAPSHOT</saga.commons.version>
         <lombok.version>1.18.30</lombok.version>
-<flyway.version>10.10.0</flyway.version>
+        <flyway.version>10.10.0</flyway.version>
     </properties>
 
     <dependencyManagement>
