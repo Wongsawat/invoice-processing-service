@@ -1,7 +1,6 @@
 package com.wpanther.invoice.processing.domain.event;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.wpanther.saga.domain.model.TraceEvent;
 import lombok.Getter;
@@ -36,23 +35,14 @@ public class InvoiceProcessedEvent extends TraceEvent {
 
     /**
      * Convenience constructor for creating the event.
-     * The correlationId is stored as sagaId in the TraceEvent.
      */
     public InvoiceProcessedEvent(String invoiceId, String invoiceNumber, BigDecimal total,
                                  String currency, String correlationId) {
-        super(correlationId, SOURCE, TRACE_TYPE, null);
+        super(null, correlationId, SOURCE, TRACE_TYPE, null);
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.total = total;
         this.currency = currency;
-    }
-
-    /**
-     * Returns the correlation ID (stored as sagaId in TraceEvent).
-     */
-    @JsonIgnore
-    public String getCorrelationId() {
-        return getSagaId();
     }
 
     @Override
@@ -67,6 +57,7 @@ public class InvoiceProcessedEvent extends TraceEvent {
         @JsonProperty("eventType") String eventType,
         @JsonProperty("version") int version,
         @JsonProperty("sagaId") String sagaId,
+        @JsonProperty("correlationId") String correlationId,
         @JsonProperty("source") String source,
         @JsonProperty("traceType") String traceType,
         @JsonProperty("context") String context,
@@ -75,7 +66,7 @@ public class InvoiceProcessedEvent extends TraceEvent {
         @JsonProperty("total") BigDecimal total,
         @JsonProperty("currency") String currency
     ) {
-        super(eventId, occurredAt, eventType, version, sagaId, source, traceType, context);
+        super(eventId, occurredAt, eventType, version, sagaId, correlationId, source, traceType, context);
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.total = total;
