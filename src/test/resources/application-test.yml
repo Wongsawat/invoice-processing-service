@@ -29,6 +29,9 @@ app:
     topics:
       invoice-processed: invoice.processed.test
       dlq: invoice.processing.dlq.test
+      saga-command-invoice: saga.command.invoice.test
+      saga-compensation-invoice: saga.compensation.invoice.test
+      saga-reply-invoice: saga.reply.invoice.test
 
 logging:
   level:

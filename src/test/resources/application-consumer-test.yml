@@ -1,0 +1,86 @@
+server:
+  port: 0
+
+spring:
+  application:
+    name: invoice-processing-service-consumer-test
+
+  main:
+    allow-bean-definition-overriding: true
+
+  # PostgreSQL (Docker test container on port 5433)
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:process_db}
+    driver-class-name: org.postgresql.Driver
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: 5
+
+  # JPA with PostgreSQL dialect
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  # Flyway enabled (runs real migrations)
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # Kafka configuration (Docker test container on port 9093)
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9093}
+
+  # Jackson
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+# Apache Camel
+camel:
+  springboot:
+    name: invoice-processing-camel-consumer-test
+    main-run-controller: false
+  dataformat:
+    jackson:
+      auto-discover-object-mapper: true
+
+# Disable Eureka for tests
+eureka:
+  client:
+    enabled: false
+
+# Application-specific configuration (same topic names as production)
+app:
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9093}
+    topics:
+      invoice-processed: invoice.processed
+      dlq: invoice.processing.dlq
+      saga-command-invoice: saga.command.invoice
+      saga-compensation-invoice: saga.compensation.invoice
+      saga-reply-invoice: saga.reply.invoice
+
+# Actuator (minimal for tests)
+management:
+  endpoints:
+    enabled-by-default: false
+    web:
+      exposure:
+        include: health
+
+# Logging
+logging:
+  level:
+    root: WARN
+    com.wpanther.invoice.processing: DEBUG
+    org.apache.camel: INFO
+    org.apache.camel.component.kafka: DEBUG
