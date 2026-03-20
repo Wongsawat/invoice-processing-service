@@ -25,8 +25,7 @@
         <teda.version>1.0.0</teda.version>
         <saga.commons.version>1.0.0-SNAPSHOT</saga.commons.version>
         <lombok.version>1.18.30</lombok.version>
-        <mapstruct.version>1.5.5.Final</mapstruct.version>
-        <flyway.version>10.10.0</flyway.version>
+<flyway.version>10.10.0</flyway.version>
     </properties>
 
     <dependencyManagement>
@@ -146,13 +145,6 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- MapStruct for entity mapping -->
-        <dependency>
-            <groupId>org.mapstruct</groupId>
-            <artifactId>mapstruct</artifactId>
-            <version>${mapstruct.version}</version>
-        </dependency>
-
         <!-- Jackson for JSON processing -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -254,11 +246,6 @@
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
                             <version>${lombok.version}</version>
-                        </path>
-                        <path>
-                            <groupId>org.mapstruct</groupId>
-                            <artifactId>mapstruct-processor</artifactId>
-                            <version>${mapstruct.version}</version>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
