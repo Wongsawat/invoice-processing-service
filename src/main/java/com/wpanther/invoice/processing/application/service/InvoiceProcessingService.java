@@ -106,11 +106,46 @@ public class InvoiceProcessingService
         log.info("Processing invoice for saga={} document={}", sagaId, documentId);
         Timer.Sample sample = Timer.start();
         try {
-            if (invoiceRepository.findBySourceInvoiceId(documentId).isPresent()) {
-                log.warn("Invoice already processed for document={}, replying SUCCESS", documentId);
-                processIdempotentCounter.increment();
-                sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
-                return;
+            // Idempotency check — also resumes partial-failure where a previous attempt
+            // saved the entity in PROCESSING state but died before reaching COMPLETED.
+            Optional<ProcessedInvoice> existing = invoiceRepository.findBySourceInvoiceId(documentId);
+            if (existing.isPresent()) {
+                ProcessedInvoice existingInvoice = existing.get();
+
+                if (existingInvoice.getStatus() == ProcessingStatus.COMPLETED) {
+                    // True idempotent case: a prior attempt fully committed this document.
+                    log.warn("Invoice already completed for document={}, returning idempotent success", documentId);
+                    processIdempotentCounter.increment();
+                    sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
+                    return;
+                }
+
+                if (existingInvoice.getStatus() == ProcessingStatus.PROCESSING) {
+                    // Partial failure: entity was inserted (PROCESSING) but the attempt died
+                    // before markCompleted() + second save could commit. Resume from here
+                    // without re-parsing or re-inserting — avoids a duplicate-key violation
+                    // and ensures the orchestrator always receives a SUCCESS reply.
+                    log.warn("Invoice for document={} found in PROCESSING state — previous attempt "
+                            + "failed mid-flight; resuming completion", documentId);
+                    existingInvoice.markCompleted(sagaId, correlationId);
+                    invoiceRepository.save(existingInvoice);
+                    existingInvoice.domainEvents().forEach(e -> {
+                        if (e instanceof InvoiceProcessedDomainEvent domainEvent) {
+                            eventPublishingPort.publish(domainEvent);
+                        }
+                    });
+                    existingInvoice.clearDomainEvents();
+                    sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
+                    processSuccessCounter.increment();
+                    log.info("Resumed and completed invoice={} for saga={}", existingInvoice.getInvoiceNumber(), sagaId);
+                    return;
+                }
+
+                // PENDING is never persisted; FAILED not yet implemented.
+                // Surface unexpected state as a clear error rather than silently mis-routing.
+                throw new IllegalStateException(
+                    "Invoice for document " + documentId + " has unexpected persisted status: "
+                        + existingInvoice.getStatus());
             }
 
             ProcessedInvoice invoice = parserPort.parse(xmlContent, documentId);

@@ -129,8 +129,23 @@ class InvoiceProcessingServiceTest {
 
     @Test
     void testProcessIdempotency() throws Exception {
-        // Given
-        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.of(validInvoice));
+        // Given — invoice must be COMPLETED to hit the idempotent-success branch
+        ProcessedInvoice completedInvoice = ProcessedInvoice.builder()
+            .id(InvoiceId.generate())
+            .sourceInvoiceId("intake-123")
+            .invoiceNumber("INV-001")
+            .issueDate(LocalDate.of(2025, 1, 1))
+            .dueDate(LocalDate.of(2025, 2, 1))
+            .seller(validInvoice.getSeller())
+            .buyer(validInvoice.getBuyer())
+            .addItem(new LineItem("Service 1", 1, Money.of(1000.00, "THB"), new BigDecimal("7.00")))
+            .currency("THB")
+            .originalXml("<xml/>")
+            .build();
+        completedInvoice.startProcessing();
+        completedInvoice.markCompleted("saga-prior", "corr-prior");
+        completedInvoice.clearDomainEvents();
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.of(completedInvoice));
 
         // When
         service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_INVOICE, "correlation-123");
@@ -141,6 +156,56 @@ class InvoiceProcessingServiceTest {
         verify(invoiceRepository, never()).save(any(ProcessedInvoice.class));
         verify(eventPublisher, never()).publish(any());
         verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_INVOICE, "correlation-123");
+    }
+
+    @Test
+    void testProcessingStateRecovery() throws Exception {
+        // Given — invoice stuck in PROCESSING from a prior crashed attempt
+        ProcessedInvoice stuckInvoice = ProcessedInvoice.builder()
+            .id(InvoiceId.generate())
+            .sourceInvoiceId("intake-123")
+            .invoiceNumber("INV-STUCK")
+            .issueDate(LocalDate.of(2025, 1, 1))
+            .dueDate(LocalDate.of(2025, 2, 1))
+            .seller(validInvoice.getSeller())
+            .buyer(validInvoice.getBuyer())
+            .addItem(new LineItem("Service 1", 1, Money.of(1000.00, "THB"), new BigDecimal("7.00")))
+            .currency("THB")
+            .originalXml("<xml/>")
+            .build();
+        stuckInvoice.startProcessing();  // leaves it in PROCESSING without completing
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.of(stuckInvoice));
+        when(invoiceRepository.save(any(ProcessedInvoice.class))).thenReturn(stuckInvoice);
+
+        // When
+        service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_INVOICE, "correlation-123");
+
+        // Then — resumes by calling markCompleted, saving, publishing event, and replying SUCCESS
+        verify(invoiceRepository, never()).findById(any());
+        verify(parserService, never()).parse(anyString(), anyString());
+        verify(invoiceRepository).save(stuckInvoice);
+        ArgumentCaptor<InvoiceProcessedDomainEvent> eventCaptor = ArgumentCaptor.forClass(InvoiceProcessedDomainEvent.class);
+        verify(eventPublisher).publish(eventCaptor.capture());
+        assertEquals("INV-STUCK", eventCaptor.getValue().invoiceNumber());
+        assertEquals("saga-1", eventCaptor.getValue().sagaId());
+        assertEquals("correlation-123", eventCaptor.getValue().correlationId());
+        verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_INVOICE, "correlation-123");
+        assertEquals(ProcessingStatus.COMPLETED, stuckInvoice.getStatus());
+    }
+
+    @Test
+    void testProcessUnexpectedPersistedStatus() {
+        // Given — invoice in an unexpected persisted state (e.g. PENDING — never persisted in practice)
+        // The IllegalStateException is caught by the outer catch block and wrapped in InvoiceProcessingException.
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.of(validInvoice));
+
+        // When / Then
+        ProcessInvoiceUseCase.InvoiceProcessingException ex = assertThrows(
+            ProcessInvoiceUseCase.InvoiceProcessingException.class, () ->
+                service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_INVOICE, "correlation-123")
+        );
+        assertTrue(ex.getCause() instanceof IllegalStateException);
+        verify(sagaReplyPort, never()).publishSuccess(any(), any(), any());
     }
 
     @Test
