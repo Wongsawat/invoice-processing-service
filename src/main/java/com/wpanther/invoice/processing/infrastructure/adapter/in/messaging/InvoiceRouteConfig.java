@@ -2,6 +2,7 @@ package com.wpanther.invoice.processing.infrastructure.adapter.in.messaging;
 
 import com.wpanther.invoice.processing.infrastructure.adapter.in.messaging.dto.CompensateInvoiceCommand;
 import com.wpanther.invoice.processing.infrastructure.adapter.in.messaging.dto.ProcessInvoiceCommand;
+import com.wpanther.invoice.processing.infrastructure.config.KafkaTopicsProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.dataformat.JsonLibrary;
@@ -15,56 +16,67 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class InvoiceRouteConfig extends RouteBuilder {
 
-    private static final int MAX_REDELIVERIES = 3;
-    private static final long REDELIVERY_DELAY_MS = 1000;
-    private static final double BACKOFF_MULTIPLIER = 2;
-    private static final long MAX_REDELIVERY_DELAY_MS = 10000;
-    private static final int MAX_POLL_RECORDS = 100;
-    private static final int CONSUMERS_COUNT = 3;
     private static final String GROUP_ID = "invoice-processing-service";
 
     private final SagaCommandHandler sagaCommandHandler;
+    private final KafkaTopicsProperties topics;
 
     @Value("${app.kafka.bootstrap-servers}")
     private String kafkaBrokers;
 
-    @Value("${app.kafka.topics.saga-command-invoice}")
-    private String sagaCommandTopic;
+    @Value("${app.camel.retry.max-redeliveries:3}")
+    private int maxRedeliveries;
 
-    @Value("${app.kafka.topics.saga-compensation-invoice}")
-    private String sagaCompensationTopic;
+    @Value("${app.camel.retry.redelivery-delay-ms:1000}")
+    private long redeliveryDelayMs;
 
-    @Value("${app.kafka.topics.dlq:invoice.processing.dlq}")
-    private String dlqTopic;
+    @Value("${app.camel.retry.backoff-multiplier:2.0}")
+    private double backoffMultiplier;
 
-    public InvoiceRouteConfig(SagaCommandHandler sagaCommandHandler) {
+    @Value("${app.camel.retry.max-redelivery-delay-ms:10000}")
+    private long maxRedeliveryDelayMs;
+
+    @Value("${app.kafka.consumers.max-poll-records:100}")
+    private int maxPollRecords;
+
+    @Value("${app.kafka.consumers.count:3}")
+    private int consumersCount;
+
+    public InvoiceRouteConfig(SagaCommandHandler sagaCommandHandler, KafkaTopicsProperties topics) {
         this.sagaCommandHandler = sagaCommandHandler;
+        this.topics = topics;
+    }
+
+    /**
+     * Build common Kafka consumer parameters.
+     */
+    private String kafkaConsumerParams() {
+        return "?brokers=RAW(" + kafkaBrokers + ")"
+                + "&groupId=" + GROUP_ID
+                + "&autoOffsetReset=earliest"
+                + "&autoCommitEnable=false"
+                + "&breakOnFirstError=true"
+                + "&maxPollRecords=" + maxPollRecords
+                + "&consumersCount=" + consumersCount;
     }
 
     @Override
     public void configure() throws Exception {
 
         // Global error handler - Dead Letter Channel with retries
-        errorHandler(deadLetterChannel("kafka:" + dlqTopic + "?brokers=RAW(" + kafkaBrokers + ")")
-            .maximumRedeliveries(MAX_REDELIVERIES)
-            .redeliveryDelay(REDELIVERY_DELAY_MS)
+        errorHandler(deadLetterChannel("kafka:" + topics.dlq() + "?brokers=RAW(" + kafkaBrokers + ")")
+            .maximumRedeliveries(maxRedeliveries)
+            .redeliveryDelay(redeliveryDelayMs)
             .useExponentialBackOff()
-            .backOffMultiplier(BACKOFF_MULTIPLIER)
-            .maximumRedeliveryDelay(MAX_REDELIVERY_DELAY_MS)
+            .backOffMultiplier(backoffMultiplier)
+            .maximumRedeliveryDelay(maxRedeliveryDelayMs)
             .logExhausted(true)
             .logStackTrace(true));
 
         // ============================================================
         // CONSUMER ROUTE: saga.command.invoice (from orchestrator)
         // ============================================================
-        from("kafka:" + sagaCommandTopic
-                + "?brokers=RAW(" + kafkaBrokers + ")"
-                + "&groupId=" + GROUP_ID
-                + "&autoOffsetReset=earliest"
-                + "&autoCommitEnable=false"
-                + "&breakOnFirstError=true"
-                + "&maxPollRecords=" + MAX_POLL_RECORDS
-                + "&consumersCount=" + CONSUMERS_COUNT)
+        from("kafka:" + topics.sagaCommandInvoice() + kafkaConsumerParams())
             .routeId("saga-command-consumer")
             .log("Received saga command from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
             .unmarshal().json(JsonLibrary.Jackson, ProcessInvoiceCommand.class)
@@ -79,14 +91,7 @@ public class InvoiceRouteConfig extends RouteBuilder {
         // ============================================================
         // CONSUMER ROUTE: saga.compensation.invoice (from orchestrator)
         // ============================================================
-        from("kafka:" + sagaCompensationTopic
-                + "?brokers=RAW(" + kafkaBrokers + ")"
-                + "&groupId=" + GROUP_ID
-                + "&autoOffsetReset=earliest"
-                + "&autoCommitEnable=false"
-                + "&breakOnFirstError=true"
-                + "&maxPollRecords=" + MAX_POLL_RECORDS
-                + "&consumersCount=" + CONSUMERS_COUNT)
+        from("kafka:" + topics.sagaCompensationInvoice() + kafkaConsumerParams())
             .routeId("saga-compensation-consumer")
             .log("Received compensation command from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
             .unmarshal().json(JsonLibrary.Jackson, CompensateInvoiceCommand.class)

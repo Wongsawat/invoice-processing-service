@@ -23,7 +23,7 @@ class SagaReplyPublisherTest {
     @BeforeEach
     void setUp() {
         HeaderSerializer headerSerializer = new HeaderSerializer(new ObjectMapper());
-        sagaReplyPublisher = new SagaReplyPublisher(outboxService, headerSerializer);
+        sagaReplyPublisher = new SagaReplyPublisher(outboxService, headerSerializer, "saga.reply.invoice");
     }
 
     @Test

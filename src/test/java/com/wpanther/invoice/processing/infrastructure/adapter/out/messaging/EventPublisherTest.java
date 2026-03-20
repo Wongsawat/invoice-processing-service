@@ -34,7 +34,7 @@ class EventPublisherTest {
     @BeforeEach
     void setUp() {
         HeaderSerializer headerSerializer = new HeaderSerializer(objectMapper);
-        eventPublisher = new EventPublisher(outboxService, headerSerializer);
+        eventPublisher = new EventPublisher(outboxService, headerSerializer, "invoice.processed");
     }
 
     @Test

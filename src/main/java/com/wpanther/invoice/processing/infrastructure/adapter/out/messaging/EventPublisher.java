@@ -3,9 +3,10 @@ package com.wpanther.invoice.processing.infrastructure.adapter.out.messaging;
 import com.wpanther.invoice.processing.application.port.out.InvoiceEventPublishingPort;
 import com.wpanther.invoice.processing.domain.event.InvoiceProcessedDomainEvent;
 import com.wpanther.invoice.processing.application.dto.event.InvoiceProcessedEvent;
+import com.wpanther.invoice.processing.infrastructure.config.KafkaTopicsProperties;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,12 +14,29 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class EventPublisher implements InvoiceEventPublishingPort {
 
     private final OutboxService outboxService;
     private final HeaderSerializer headerSerializer;
+    private final String invoiceProcessedTopic;
+
+    /** Production constructor — Spring injects the bound {@link KafkaTopicsProperties}. */
+    @Autowired
+    public EventPublisher(
+            OutboxService outboxService,
+            HeaderSerializer headerSerializer,
+            KafkaTopicsProperties topics) {
+        this(outboxService, headerSerializer, topics.invoiceProcessed());
+    }
+
+    /** Package-private constructor for unit tests that pass the topic string directly. */
+    EventPublisher(OutboxService outboxService, HeaderSerializer headerSerializer,
+                   String invoiceProcessedTopic) {
+        this.outboxService = outboxService;
+        this.headerSerializer = headerSerializer;
+        this.invoiceProcessedTopic = invoiceProcessedTopic;
+    }
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
@@ -40,7 +58,7 @@ public class EventPublisher implements InvoiceEventPublishingPort {
             kafkaEvent,
             "ProcessedInvoice",
             domainEvent.invoiceId().toString(),
-            "invoice.processed",
+            invoiceProcessedTopic,
             domainEvent.invoiceId().toString(),
             headerSerializer.toJson(headers)
         );
@@ -59,7 +77,7 @@ public class EventPublisher implements InvoiceEventPublishingPort {
             event,
             "ProcessedInvoice",
             event.getInvoiceId(),
-            "invoice.processed",
+            invoiceProcessedTopic,
             event.getInvoiceId(),
             headerSerializer.toJson(headers)
         );

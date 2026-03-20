@@ -2,9 +2,11 @@ package com.wpanther.invoice.processing;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
+import com.wpanther.invoice.processing.infrastructure.config.KafkaTopicsProperties;
 
 /**
  * Invoice Processing Service - Main Application
@@ -26,6 +28,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableDiscoveryClient
 @EnableTransactionManagement
 @EnableScheduling
+@EnableConfigurationProperties(KafkaTopicsProperties.class)
 public class InvoiceProcessingServiceApplication {
 
     public static void main(String[] args) {

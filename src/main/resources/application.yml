@@ -69,8 +69,18 @@ app:
   invoice:
     default-due-date-days: 30
 
+  camel:
+    retry:
+      max-redeliveries: 3
+      redelivery-delay-ms: 1000
+      backoff-multiplier: 2.0
+      max-redelivery-delay-ms: 10000
+
   kafka:
     bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+    consumers:
+      max-poll-records: 100
+      count: 3
     topics:
       # Saga topics (orchestrator to service communication)
       saga-command-invoice: saga.command.invoice
