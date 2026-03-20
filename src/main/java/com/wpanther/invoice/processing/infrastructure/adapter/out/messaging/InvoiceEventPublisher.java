@@ -67,22 +67,4 @@ public class InvoiceEventPublisher implements InvoiceEventPublishingPort {
         log.info("Published InvoiceProcessedEvent to outbox: {}", domainEvent.invoiceNumber());
     }
 
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void publishInvoiceProcessed(InvoiceProcessedEvent event) {
-        Map<String, String> headers = Map.of(
-            "correlationId", event.getCorrelationId(),
-            "invoiceNumber", event.getInvoiceNumber()
-        );
-
-        outboxService.saveWithRouting(
-            event,
-            "ProcessedInvoice",
-            event.getInvoiceId(),
-            invoiceProcessedTopic,
-            event.getInvoiceId(),
-            headerSerializer.toJson(headers)
-        );
-
-        log.info("Published InvoiceProcessedEvent to outbox: {}", event.getInvoiceNumber());
-    }
 }
