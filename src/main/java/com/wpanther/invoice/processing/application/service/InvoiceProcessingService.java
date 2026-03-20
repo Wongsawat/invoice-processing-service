@@ -118,7 +118,7 @@ public class InvoiceProcessingService
             invoice.startProcessing();
             invoiceRepository.save(invoice);
 
-            invoice.markCompleted(correlationId);
+            invoice.markCompleted(sagaId, correlationId);
             invoiceRepository.save(invoice);
 
             invoice.domainEvents().forEach(e -> {

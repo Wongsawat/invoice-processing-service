@@ -2,7 +2,6 @@ package com.wpanther.invoice.processing.domain.model;
 
 import com.wpanther.invoice.processing.domain.event.InvoiceProcessedDomainEvent;
 
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -149,20 +148,21 @@ public class ProcessedInvoice {
      * Mark invoice processing as completed.
      * Raises InvoiceProcessedDomainEvent.
      *
+     * @param sagaId        The saga orchestration instance ID
      * @param correlationId The saga correlation ID for event tracing
      */
-    public void markCompleted(String correlationId) {
+    public void markCompleted(String sagaId, String correlationId) {
         if (status != ProcessingStatus.PROCESSING) {
             throw new IllegalStateException("Can only complete from PROCESSING status");
         }
         this.status = ProcessingStatus.COMPLETED;
         this.completedAt = LocalDateTime.now();
-        domainEvents.add(new InvoiceProcessedDomainEvent(
+        domainEvents.add(InvoiceProcessedDomainEvent.of(
             this.id,
             this.invoiceNumber,
             this.getTotal(),
-            correlationId,
-            Instant.now()
+            sagaId,
+            correlationId
         ));
     }
 

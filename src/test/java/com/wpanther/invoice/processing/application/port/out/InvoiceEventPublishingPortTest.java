@@ -18,7 +18,7 @@ class InvoiceEventPublishingPortTest {
         InvoiceProcessedDomainEvent event = new InvoiceProcessedDomainEvent(
             InvoiceId.generate(), "INV-001",
             new Money(new BigDecimal("100.00"), "THB"),
-            "corr-1", Instant.now()
+            "saga-1", "corr-1", Instant.now()
         );
 
         port.publish(event);

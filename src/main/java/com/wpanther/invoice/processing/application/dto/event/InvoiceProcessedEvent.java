@@ -35,10 +35,17 @@ public class InvoiceProcessedEvent extends TraceEvent {
 
     /**
      * Convenience constructor for creating the event.
+     *
+     * @param invoiceId     the processed invoice ID
+     * @param invoiceNumber the invoice number
+     * @param total         the invoice grand total
+     * @param currency      the currency code
+     * @param sagaId        the saga orchestration instance ID
+     * @param correlationId the end-to-end correlation ID from the originating request
      */
     public InvoiceProcessedEvent(String invoiceId, String invoiceNumber, BigDecimal total,
-                                 String currency, String correlationId) {
-        super(null, correlationId, SOURCE, TRACE_TYPE, null);
+                                 String currency, String sagaId, String correlationId) {
+        super(sagaId, correlationId, SOURCE, TRACE_TYPE, null);
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.total = total;

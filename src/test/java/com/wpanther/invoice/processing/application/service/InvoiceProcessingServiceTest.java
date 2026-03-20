@@ -123,6 +123,7 @@ class InvoiceProcessingServiceTest {
         InvoiceProcessedDomainEvent event = eventCaptor.getValue();
         assertEquals("INV-001", event.invoiceNumber());
         assertEquals("THB", event.total().currency());
+        assertEquals("saga-1", event.sagaId());
         assertEquals("correlation-123", event.correlationId());
     }
 
@@ -159,6 +160,7 @@ class InvoiceProcessingServiceTest {
         InvoiceProcessedDomainEvent event = eventCaptor.getValue();
         assertEquals("INV-001", event.invoiceNumber());
         assertEquals("THB", event.total().currency());
+        assertEquals("saga-1", event.sagaId());
         assertEquals("correlation-123", event.correlationId());
     }
 

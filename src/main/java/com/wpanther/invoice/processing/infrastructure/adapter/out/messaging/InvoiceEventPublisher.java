@@ -46,6 +46,7 @@ public class InvoiceEventPublisher implements InvoiceEventPublishingPort {
             domainEvent.invoiceNumber(),
             domainEvent.total().amount(),
             domainEvent.total().currency(),
+            domainEvent.sagaId(),
             domainEvent.correlationId()
         );
 

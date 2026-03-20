@@ -169,7 +169,7 @@ class ProcessedInvoiceTest {
         invoice.startProcessing();
 
         // When
-        invoice.markCompleted("test-correlation");
+        invoice.markCompleted("test-saga", "test-correlation");
 
         // Then
         assertEquals(ProcessingStatus.COMPLETED, invoice.getStatus());
@@ -182,7 +182,7 @@ class ProcessedInvoiceTest {
         ProcessedInvoice invoice = validInvoiceBuilder.build();
 
         // When/Then
-        assertThrows(IllegalStateException.class, () -> invoice.markCompleted("test-correlation"));
+        assertThrows(IllegalStateException.class, () -> invoice.markCompleted("test-saga", "test-correlation"));
     }
 
     @Test
@@ -401,7 +401,7 @@ class ProcessedInvoiceTest {
         invoice.startProcessing();
         assertEquals(ProcessingStatus.PROCESSING, invoice.getStatus());
 
-        invoice.markCompleted("test-correlation");
+        invoice.markCompleted("test-saga", "test-correlation");
         assertEquals(ProcessingStatus.COMPLETED, invoice.getStatus());
         assertNotNull(invoice.getCompletedAt());
     }
@@ -460,12 +460,13 @@ class ProcessedInvoiceTest {
         ProcessedInvoice invoice = validInvoiceBuilder.build();
         invoice.startProcessing();
 
-        invoice.markCompleted("corr-abc");
+        invoice.markCompleted("saga-abc", "corr-abc");
 
         assertThat(invoice.domainEvents()).hasSize(1);
         InvoiceProcessedDomainEvent event =
             (InvoiceProcessedDomainEvent) invoice.domainEvents().get(0);
         assertThat(event.invoiceId()).isEqualTo(invoice.getId());
+        assertThat(event.sagaId()).isEqualTo("saga-abc");
         assertThat(event.correlationId()).isEqualTo("corr-abc");
         assertThat(event.invoiceNumber()).isEqualTo(invoice.getInvoiceNumber());
         assertThat(event.occurredAt()).isNotNull();
@@ -475,7 +476,7 @@ class ProcessedInvoiceTest {
     void clearDomainEvents_shouldEmptyTheList() {
         ProcessedInvoice invoice = validInvoiceBuilder.build();
         invoice.startProcessing();
-        invoice.markCompleted("corr-xyz");
+        invoice.markCompleted("saga-xyz", "corr-xyz");
         assertThat(invoice.domainEvents()).hasSize(1);
 
         invoice.clearDomainEvents();

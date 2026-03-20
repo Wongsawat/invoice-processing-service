@@ -18,12 +18,13 @@ class InvoiceProcessedDomainEventTest {
         Instant now = Instant.now();
 
         InvoiceProcessedDomainEvent event = new InvoiceProcessedDomainEvent(
-            id, "INV-001", total, "corr-123", now
+            id, "INV-001", total, "saga-123", "corr-123", now
         );
 
         assertThat(event.invoiceId()).isEqualTo(id);
         assertThat(event.invoiceNumber()).isEqualTo("INV-001");
         assertThat(event.total()).isEqualTo(total);
+        assertThat(event.sagaId()).isEqualTo("saga-123");
         assertThat(event.correlationId()).isEqualTo("corr-123");
         assertThat(event.occurredAt()).isEqualTo(now);
     }
@@ -34,8 +35,8 @@ class InvoiceProcessedDomainEventTest {
         Money total = new Money(new BigDecimal("500.00"), "THB");
         Instant now = Instant.now();
 
-        InvoiceProcessedDomainEvent e1 = new InvoiceProcessedDomainEvent(id, "INV-002", total, "c-1", now);
-        InvoiceProcessedDomainEvent e2 = new InvoiceProcessedDomainEvent(id, "INV-002", total, "c-1", now);
+        InvoiceProcessedDomainEvent e1 = new InvoiceProcessedDomainEvent(id, "INV-002", total, "saga-1", "c-1", now);
+        InvoiceProcessedDomainEvent e2 = new InvoiceProcessedDomainEvent(id, "INV-002", total, "saga-1", "c-1", now);
 
         assertThat(e1).isEqualTo(e2);
     }

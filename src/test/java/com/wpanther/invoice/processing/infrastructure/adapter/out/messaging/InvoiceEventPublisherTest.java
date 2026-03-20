@@ -49,6 +49,7 @@ class InvoiceEventPublisherTest {
             "INV-001",
             new BigDecimal("10000.00"),
             "THB",
+            "saga-123",
             "correlation-123"
         );
         when(objectMapper.writeValueAsString(any(Map.class))).thenReturn("{\"correlationId\":\"correlation-123\",\"invoiceNumber\":\"INV-001\"}");
@@ -70,7 +71,7 @@ class InvoiceEventPublisherTest {
     @Test
     void testPublishInvoiceProcessed_usesCorrectTopic() throws JsonProcessingException {
         InvoiceProcessedEvent event = new InvoiceProcessedEvent(
-            "inv-456", "INV-002", new BigDecimal("5000.00"), "THB", "corr-456"
+            "inv-456", "INV-002", new BigDecimal("5000.00"), "THB", "saga-456", "corr-456"
         );
         when(objectMapper.writeValueAsString(any(Map.class))).thenReturn("{}");
 
@@ -84,7 +85,7 @@ class InvoiceEventPublisherTest {
     @Test
     void testPublishInvoiceProcessed_usesInvoiceIdAsPartitionKey() throws JsonProcessingException {
         InvoiceProcessedEvent event = new InvoiceProcessedEvent(
-            "inv-789", "INV-003", new BigDecimal("2000.00"), "THB", "corr-789"
+            "inv-789", "INV-003", new BigDecimal("2000.00"), "THB", "saga-789", "corr-789"
         );
         when(objectMapper.writeValueAsString(any(Map.class))).thenReturn("{}");
 
@@ -103,7 +104,7 @@ class InvoiceEventPublisherTest {
     @Test
     void testPublishInvoiceProcessed_whenOutboxFails_propagatesException() throws JsonProcessingException {
         InvoiceProcessedEvent event = new InvoiceProcessedEvent(
-            "inv-err", "INV-ERR", new BigDecimal("1000.00"), "THB", "corr-err"
+            "inv-err", "INV-ERR", new BigDecimal("1000.00"), "THB", "saga-err", "corr-err"
         );
         when(objectMapper.writeValueAsString(any(Map.class))).thenReturn("{}");
         doThrow(new RuntimeException("Outbox unavailable"))
@@ -125,6 +126,7 @@ class InvoiceEventPublisherTest {
             invoiceId,
             "INV-DOM-001",
             Money.of(new BigDecimal("5000.00"), "THB"),
+            "saga-dom-1",
             "corr-dom-1",
             Instant.now()
         );
@@ -151,7 +153,7 @@ class InvoiceEventPublisherTest {
         InvoiceProcessedDomainEvent domainEvent = new InvoiceProcessedDomainEvent(
             invoiceId, "INV-DOM-002",
             Money.of(new BigDecimal("1000.00"), "THB"),
-            "corr-dom-2", Instant.now()
+            "saga-dom-2", "corr-dom-2", Instant.now()
         );
         when(objectMapper.writeValueAsString(any(Map.class))).thenReturn("{}");
 
@@ -167,7 +169,7 @@ class InvoiceEventPublisherTest {
         InvoiceProcessedDomainEvent domainEvent = new InvoiceProcessedDomainEvent(
             InvoiceId.generate(), "INV-DOM-ERR",
             Money.of(new BigDecimal("100.00"), "THB"),
-            "corr-dom-err", Instant.now()
+            "saga-dom-err", "corr-dom-err", Instant.now()
         );
         when(objectMapper.writeValueAsString(any(Map.class))).thenReturn("{}");
         doThrow(new RuntimeException("Outbox unavailable"))
@@ -181,7 +183,7 @@ class InvoiceEventPublisherTest {
         InvoiceProcessedDomainEvent domainEvent = new InvoiceProcessedDomainEvent(
             InvoiceId.generate(), "INV-DOM-HDR",
             Money.of(new BigDecimal("200.00"), "THB"),
-            "corr-dom-hdr", Instant.now()
+            "saga-dom-hdr", "corr-dom-hdr", Instant.now()
         );
         when(objectMapper.writeValueAsString(any(Map.class))).thenThrow(JsonProcessingException.class);
 
@@ -194,7 +196,7 @@ class InvoiceEventPublisherTest {
     @Test
     void testPublishInvoiceProcessed_headersFallbackWhenSerializationFails() throws JsonProcessingException {
         InvoiceProcessedEvent event = new InvoiceProcessedEvent(
-            "inv-hdr", "INV-HDR", new BigDecimal("3000.00"), "THB", "corr-hdr"
+            "inv-hdr", "INV-HDR", new BigDecimal("3000.00"), "THB", "saga-hdr", "corr-hdr"
         );
         when(objectMapper.writeValueAsString(any(Map.class))).thenThrow(JsonProcessingException.class);
 
