@@ -197,6 +197,7 @@ class ProcessedInvoiceEntityTest {
             now,
             null,
             now,
+            0L,
             new HashSet<>(),
             new ArrayList<>()
         );

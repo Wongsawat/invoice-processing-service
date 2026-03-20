@@ -66,6 +66,9 @@ class ProcessedInvoiceRepositoryImplTest {
             .currency("THB")
             .originalXml("<xml>test</xml>")
             .build();
+
+        // Contract: first save must use PROCESSING status
+        testInvoice.startProcessing();
     }
 
     @Test
@@ -122,7 +125,7 @@ class ProcessedInvoiceRepositoryImplTest {
         repository.save(testInvoice);
 
         // When
-        List<ProcessedInvoice> found = repository.findByStatus(ProcessingStatus.PENDING);
+        List<ProcessedInvoice> found = repository.findByStatus(ProcessingStatus.PROCESSING);
 
         // Then
         assertFalse(found.isEmpty());
@@ -173,17 +176,17 @@ class ProcessedInvoiceRepositoryImplTest {
 
     @Test
     void testUpdateInvoice() {
-        // Given
-        ProcessedInvoice saved = repository.save(testInvoice);
-        saved.startProcessing();
+        // Given — initial INSERT
+        repository.save(testInvoice);
 
-        // When
-        ProcessedInvoice updated = repository.save(saved);
+        // When — UPDATE to COMPLETED
+        testInvoice.markCompleted("test-corr");
+        ProcessedInvoice updated = repository.save(testInvoice);
         Optional<ProcessedInvoice> found = repository.findById(updated.getId());
 
         // Then
         assertTrue(found.isPresent());
-        assertEquals(ProcessingStatus.PROCESSING, found.get().getStatus());
+        assertEquals(ProcessingStatus.COMPLETED, found.get().getStatus());
     }
 
     @Test
@@ -201,6 +204,7 @@ class ProcessedInvoiceRepositoryImplTest {
             .currency("THB")
             .originalXml("<xml>test2</xml>")
             .build();
+        invoice2.startProcessing();
 
         // When
         repository.save(testInvoice);
@@ -230,12 +234,13 @@ class ProcessedInvoiceRepositoryImplTest {
             .currency("THB")
             .originalXml("<xml>test2</xml>")
             .build();
+        invoice2.startProcessing();
 
         repository.save(testInvoice);
         repository.save(invoice2);
 
         // When
-        List<ProcessedInvoice> found = repository.findByStatus(ProcessingStatus.PENDING);
+        List<ProcessedInvoice> found = repository.findByStatus(ProcessingStatus.PROCESSING);
 
         // Then
         assertEquals(2, found.size());
@@ -243,13 +248,10 @@ class ProcessedInvoiceRepositoryImplTest {
 
     @Test
     void testCompleteWorkflowWithRepository() {
-        // Given
+        // Given — INSERT at PROCESSING
         ProcessedInvoice saved = repository.save(testInvoice);
 
-        // When - Simulate complete workflow
-        saved.startProcessing();
-        repository.save(saved);
-
+        // When — UPDATE to COMPLETED
         saved.markCompleted("test-correlation");
         ProcessedInvoice finalInvoice = repository.save(saved);
 
@@ -262,11 +264,12 @@ class ProcessedInvoiceRepositoryImplTest {
 
     @Test
     void testSaveWithFailedStatus() {
-        // Given
-        testInvoice.markFailed("Test error message");
+        // Given — INSERT at PROCESSING first, then mark failed
+        ProcessedInvoice saved = repository.save(testInvoice);
+        saved.markFailed("Test error message");
 
         // When
-        ProcessedInvoice saved = repository.save(testInvoice);
+        repository.save(saved);
         Optional<ProcessedInvoice> found = repository.findById(saved.getId());
 
         // Then
@@ -359,8 +362,17 @@ class ProcessedInvoiceRepositoryImplTest {
             .currency("THB")
             .originalXml("<xml>duplicate</xml>")
             .build();
+        duplicate.startProcessing();
 
         // When / Then: unique constraint on source_invoice_id rejects the duplicate
         assertThrows(DataIntegrityViolationException.class, () -> repository.save(duplicate));
+    }
+
+    @Test
+    void save_whenNonProcessingStatusOnUnpersistedInvoice_throwsIllegalStateException() {
+        // PENDING → COMPLETED without a prior PROCESSING insert is a contract violation
+        testInvoice.markCompleted("test-corr");
+
+        assertThrows(IllegalStateException.class, () -> repository.save(testInvoice));
     }
 }
