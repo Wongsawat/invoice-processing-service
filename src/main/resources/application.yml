@@ -62,6 +62,13 @@ app:
       retention-days: 7
       cron: "0 0 2 * * *"
 
+  parsing:
+    timeout-seconds: 10
+    max-concurrent: 300
+
+  invoice:
+    default-due-date-days: 30
+
   kafka:
     bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
     topics:

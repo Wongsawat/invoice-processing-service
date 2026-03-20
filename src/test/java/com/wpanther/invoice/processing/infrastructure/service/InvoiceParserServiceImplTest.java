@@ -75,8 +75,9 @@ class InvoiceParserServiceImplTest {
             InvoiceParserPort.InvoiceParsingException.class,
             () -> parserService.parse(xxeXml, "attack-id")
         );
-        assertTrue(ex.getMessage().contains("Failed to parse XML")
-            || ex.getMessage().contains("DOCTYPE"),
+        assertTrue(ex.getMessage().contains("XML parsing failed")
+            || ex.getMessage().contains("DOCTYPE")
+            || ex.getMessage().contains("Failed to parse XML"),
             "Expected parse rejection due to DOCTYPE; got: " + ex.getMessage());
     }
 
@@ -399,16 +400,19 @@ class InvoiceParserServiceImplTest {
     }
 
     @Test
-    void testParseInvoiceWithMissingSellerCountry() {
+    void testParseInvoiceWithMissingSellerCountry() throws InvoiceParserPort.InvoiceParsingException {
         // Given: XML without seller country
+        // Per Thai e-Tax XSD, PostalTradeAddress.CountryID is optional.
+        // When absent the address is null on the Party (not a parse error).
         String xmlContent = getInvoiceXmlWithoutSellerCountry();
 
-        // When/Then: Should throw InvoiceParsingException
-        InvoiceParserPort.InvoiceParsingException exception =
-            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
-                () -> parserService.parse(xmlContent, "test-123"));
+        // When: Parsing should succeed
+        ProcessedInvoice invoice = parserService.parse(xmlContent, "test-123");
 
-        assertTrue(exception.getMessage().contains("Seller country"));
+        // Then: Seller address is null (country absent → address discarded)
+        assertNotNull(invoice);
+        assertNull(invoice.getSeller().address(),
+            "Seller address must be null when CountryID is absent");
     }
 
     /**
@@ -1403,16 +1407,19 @@ class InvoiceParserServiceImplTest {
     }
 
     @Test
-    void testParseInvoiceWithMissingSellerPostalAddress() {
-        // Given: XML where seller has no PostalTradeAddress element at all
+    void testParseInvoiceWithMissingSellerPostalAddress() throws InvoiceParserPort.InvoiceParsingException {
+        // Given: XML where seller has no PostalTradeAddress element at all.
+        // Per Thai e-Tax XSD, PostalTradeAddress is optional — the parse succeeds
+        // and the seller address is null (not a parse error).
         String xmlContent = getInvoiceXmlWithMissingSellerPostalAddress();
 
-        // When/Then: Should throw InvoiceParsingException about missing seller address
-        InvoiceParserPort.InvoiceParsingException exception =
-            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
-                () -> parserService.parse(xmlContent, "test-123"));
+        // When: Parsing should succeed
+        ProcessedInvoice invoice = parserService.parse(xmlContent, "test-123");
 
-        assertTrue(exception.getMessage().contains("address") || exception.getMessage().contains("Seller"));
+        // Then: Seller address is null when PostalTradeAddress is absent
+        assertNotNull(invoice);
+        assertNull(invoice.getSeller().address(),
+            "Seller address must be null when PostalTradeAddress element is absent");
     }
 
     @Test
@@ -1571,6 +1578,19 @@ class InvoiceParserServiceImplTest {
                 <ram:ApplicableHeaderTradeSettlement>
                   <ram:InvoiceCurrencyCode>THB</ram:InvoiceCurrencyCode>
                 </ram:ApplicableHeaderTradeSettlement>
+                <ram:IncludedSupplyChainTradeLineItem>
+                  <ram:SpecifiedLineTradeAgreement>
+                    <ram:GrossPriceProductTradePrice>
+                      <ram:ChargeAmount>1000.00</ram:ChargeAmount>
+                    </ram:GrossPriceProductTradePrice>
+                  </ram:SpecifiedLineTradeAgreement>
+                  <ram:SpecifiedLineTradeDelivery>
+                    <ram:BilledQuantity>1</ram:BilledQuantity>
+                  </ram:SpecifiedLineTradeDelivery>
+                  <ram:SpecifiedTradeProduct>
+                    <ram:Name>Test Service</ram:Name>
+                  </ram:SpecifiedTradeProduct>
+                </ram:IncludedSupplyChainTradeLineItem>
               </rsm:SupplyChainTradeTransaction>
             </rsm:Invoice_CrossIndustryInvoice>
             """;
@@ -1866,24 +1886,78 @@ class InvoiceParserServiceImplTest {
                 <ram:ApplicableHeaderTradeSettlement>
                   <ram:InvoiceCurrencyCode>THB</ram:InvoiceCurrencyCode>
                 </ram:ApplicableHeaderTradeSettlement>
+                <ram:IncludedSupplyChainTradeLineItem>
+                  <ram:SpecifiedLineTradeAgreement>
+                    <ram:GrossPriceProductTradePrice>
+                      <ram:ChargeAmount>1000.00</ram:ChargeAmount>
+                    </ram:GrossPriceProductTradePrice>
+                  </ram:SpecifiedLineTradeAgreement>
+                  <ram:SpecifiedLineTradeDelivery>
+                    <ram:BilledQuantity>1</ram:BilledQuantity>
+                  </ram:SpecifiedLineTradeDelivery>
+                  <ram:SpecifiedTradeProduct>
+                    <ram:Name>Test Service</ram:Name>
+                  </ram:SpecifiedTradeProduct>
+                </ram:IncludedSupplyChainTradeLineItem>
               </rsm:SupplyChainTradeTransaction>
             </rsm:Invoice_CrossIndustryInvoice>
             """;
     }
 
     @Test
-    void parseInvoice_whenSaxParserConfigFails_throwsInvoiceParsingException() throws Exception {
+    void constructor_whenSaxParserConfigFails_throwsIllegalStateException() throws Exception {
+        // SAXParserFactory is now initialized once at construction time (not per-parse).
+        // A factory setFeature failure during construction must surface as IllegalStateException.
         try (MockedStatic<SAXParserFactory> mockedSpf = mockStatic(SAXParserFactory.class)) {
             SAXParserFactory mockFactory = mock(SAXParserFactory.class);
             mockedSpf.when(SAXParserFactory::newInstance).thenReturn(mockFactory);
             doThrow(new ParserConfigurationException("Simulated config failure"))
                 .when(mockFactory).setFeature(anyString(), anyBoolean());
 
-            InvoiceParserPort.InvoiceParsingException ex = assertThrows(
-                InvoiceParserPort.InvoiceParsingException.class,
-                () -> parserService.parse("<xml>test</xml>", "test-id")
-            );
-            assertTrue(ex.getMessage().contains("Failed to configure XML parser"));
+            assertThrows(IllegalStateException.class, () -> new InvoiceParserServiceImpl());
         }
+    }
+
+    @Test
+    void parse_whenXmlExceedsMaxSize_throwsInvoiceParsingException() {
+        // Generate a payload larger than MAX_XML_BYTES (500 KB)
+        String oversizedXml = "a".repeat(InvoiceParserServiceImpl.MAX_XML_BYTES + 1);
+
+        InvoiceParserPort.InvoiceParsingException ex = assertThrows(
+            InvoiceParserPort.InvoiceParsingException.class,
+            () -> parserService.parse(oversizedXml, "oversize-id")
+        );
+        assertTrue(ex.getMessage().contains("too large"),
+            "Exception message must mention 'too large'; got: " + ex.getMessage());
+    }
+
+    @Test
+    void parse_whenParseTimesOut_throwsInvoiceParsingException() throws Exception {
+        // Use a 1 ms timeout so even a trivial parse triggers the timeout guard.
+        InvoiceParserServiceImpl fastTimeoutService =
+            new InvoiceParserServiceImpl(1, java.util.concurrent.TimeUnit.MILLISECONDS);
+
+        // Any valid-ish XML — the timeout fires before JAXB produces a result.
+        String anyXml = getSampleInvoiceXml();
+
+        InvoiceParserPort.InvoiceParsingException ex = assertThrows(
+            InvoiceParserPort.InvoiceParsingException.class,
+            () -> fastTimeoutService.parse(anyXml, "timeout-id")
+        );
+        assertTrue(ex.getMessage().contains("timed out") || ex.getMessage().contains("parsing"),
+            "Exception message should indicate timeout; got: " + ex.getMessage());
+
+        fastTimeoutService.shutdownExecutor();
+    }
+
+    @Test
+    void parse_whenSchemeIsUnrecognised_defaultsToVat() throws InvoiceParserPort.InvoiceParsingException {
+        // XML with an unrecognised schemeID — should be silently replaced with VAT
+        String xmlContent = getInvoiceXmlWithTaxIdNoScheme();
+
+        ProcessedInvoice invoice = parserService.parse(xmlContent, "scheme-test");
+
+        assertEquals("VAT", invoice.getSeller().taxIdentifier().scheme(),
+            "Unrecognised scheme must be normalised to VAT");
     }
 }
