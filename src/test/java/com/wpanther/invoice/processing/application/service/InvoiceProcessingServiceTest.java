@@ -143,8 +143,7 @@ class InvoiceProcessingServiceTest {
             .originalXml("<xml/>")
             .build();
         completedInvoice.startProcessing();
-        completedInvoice.markCompleted("saga-prior", "corr-prior");
-        completedInvoice.clearDomainEvents();
+        completedInvoice.markCompleted();
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.of(completedInvoice));
 
         // When

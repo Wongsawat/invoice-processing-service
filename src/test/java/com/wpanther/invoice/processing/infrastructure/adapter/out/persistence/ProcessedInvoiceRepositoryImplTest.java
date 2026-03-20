@@ -180,7 +180,7 @@ class ProcessedInvoiceRepositoryImplTest {
         repository.save(testInvoice);
 
         // When — UPDATE to COMPLETED
-        testInvoice.markCompleted("test-saga", "test-corr");
+        testInvoice.markCompleted();
         ProcessedInvoice updated = repository.save(testInvoice);
         Optional<ProcessedInvoice> found = repository.findById(updated.getId());
 
@@ -252,7 +252,7 @@ class ProcessedInvoiceRepositoryImplTest {
         ProcessedInvoice saved = repository.save(testInvoice);
 
         // When — UPDATE to COMPLETED
-        saved.markCompleted("test-saga", "test-correlation");
+        saved.markCompleted();
         ProcessedInvoice finalInvoice = repository.save(saved);
 
         // Then
@@ -371,7 +371,7 @@ class ProcessedInvoiceRepositoryImplTest {
     @Test
     void save_whenNonProcessingStatusOnUnpersistedInvoice_throwsIllegalStateException() {
         // PENDING → COMPLETED without a prior PROCESSING insert is a contract violation
-        testInvoice.markCompleted("test-saga", "test-corr");
+        testInvoice.markCompleted();
 
         assertThrows(IllegalStateException.class, () -> repository.save(testInvoice));
     }

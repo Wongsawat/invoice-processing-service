@@ -127,14 +127,15 @@ public class InvoiceProcessingService
                     // and ensures the orchestrator always receives a SUCCESS reply.
                     log.warn("Invoice for document={} found in PROCESSING state — previous attempt "
                             + "failed mid-flight; resuming completion", documentId);
-                    existingInvoice.markCompleted(sagaId, correlationId);
+                    existingInvoice.markCompleted();
                     invoiceRepository.save(existingInvoice);
-                    existingInvoice.domainEvents().forEach(e -> {
-                        if (e instanceof InvoiceProcessedDomainEvent domainEvent) {
-                            eventPublishingPort.publish(domainEvent);
-                        }
-                    });
-                    existingInvoice.clearDomainEvents();
+                    eventPublishingPort.publish(InvoiceProcessedDomainEvent.of(
+                        existingInvoice.getId(),
+                        existingInvoice.getInvoiceNumber(),
+                        existingInvoice.getTotal(),
+                        sagaId,
+                        correlationId
+                    ));
                     sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
                     processSuccessCounter.increment();
                     log.info("Resumed and completed invoice={} for saga={}", existingInvoice.getInvoiceNumber(), sagaId);
@@ -153,15 +154,16 @@ public class InvoiceProcessingService
             invoice.startProcessing();
             invoiceRepository.save(invoice);
 
-            invoice.markCompleted(sagaId, correlationId);
+            invoice.markCompleted();
             invoiceRepository.save(invoice);
 
-            invoice.domainEvents().forEach(e -> {
-                if (e instanceof InvoiceProcessedDomainEvent domainEvent) {
-                    eventPublishingPort.publish(domainEvent);
-                }
-            });
-            invoice.clearDomainEvents();
+            eventPublishingPort.publish(InvoiceProcessedDomainEvent.of(
+                invoice.getId(),
+                invoice.getInvoiceNumber(),
+                invoice.getTotal(),
+                sagaId,
+                correlationId
+            ));
 
             sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
             processSuccessCounter.increment();
