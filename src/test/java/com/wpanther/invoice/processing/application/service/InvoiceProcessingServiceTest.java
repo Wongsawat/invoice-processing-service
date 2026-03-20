@@ -9,6 +9,7 @@ import com.wpanther.invoice.processing.domain.model.*;
 import com.wpanther.invoice.processing.domain.port.out.InvoiceParserPort;
 import com.wpanther.invoice.processing.domain.port.out.ProcessedInvoiceRepository;
 import com.wpanther.saga.domain.enums.SagaStep;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -62,7 +63,8 @@ class InvoiceProcessingServiceTest {
             parserService,
             sagaReplyPort,
             eventPublisher,
-            transactionManager
+            transactionManager,
+            new SimpleMeterRegistry()
         );
 
         // Setup valid invoice

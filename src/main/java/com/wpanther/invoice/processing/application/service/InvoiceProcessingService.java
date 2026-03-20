@@ -11,6 +11,9 @@ import com.wpanther.invoice.processing.domain.model.ProcessingStatus;
 import com.wpanther.invoice.processing.domain.port.out.InvoiceParserPort;
 import com.wpanther.invoice.processing.domain.port.out.ProcessedInvoiceRepository;
 import com.wpanther.saga.domain.enums.SagaStep;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
@@ -42,12 +45,23 @@ public class InvoiceProcessingService
     // Fresh-transaction executor for replying after a ROLLBACK_ONLY outer transaction
     private final TransactionTemplate requiresNewTemplate;
 
+    // Metrics — initialized once in constructor
+    private final Counter processSuccessCounter;
+    private final Counter processFailureCounter;
+    private final Counter processIdempotentCounter;
+    private final Counter processRaceConditionResolvedCounter;
+    private final Counter compensateSuccessCounter;
+    private final Counter compensateIdempotentCounter;
+    private final Counter compensateFailureCounter;
+    private final Timer processingTimer;
+
     public InvoiceProcessingService(
             ProcessedInvoiceRepository invoiceRepository,
             InvoiceParserPort parserPort,
             SagaReplyPort sagaReplyPort,
             InvoiceEventPublishingPort eventPublishingPort,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            MeterRegistry meterRegistry) {
         this.invoiceRepository = invoiceRepository;
         this.parserPort = parserPort;
         this.sagaReplyPort = sagaReplyPort;
@@ -56,6 +70,32 @@ public class InvoiceProcessingService
         TransactionTemplate template = new TransactionTemplate(transactionManager);
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.requiresNewTemplate = template;
+
+        // Initialize metrics once
+        this.processSuccessCounter = Counter.builder("invoice.processing.success")
+            .description("Number of successfully processed invoices")
+            .register(meterRegistry);
+        this.processFailureCounter = Counter.builder("invoice.processing.failure")
+            .description("Number of failed invoice processing attempts")
+            .register(meterRegistry);
+        this.processIdempotentCounter = Counter.builder("invoice.processing.idempotent")
+            .description("Number of duplicate processing requests handled idempotently")
+            .register(meterRegistry);
+        this.processRaceConditionResolvedCounter = Counter.builder("invoice.processing.race_condition_resolved")
+            .description("Number of DuplicateKeyExceptions on source_invoice_id resolved as concurrent inserts — re-check confirmed the document was committed by another thread")
+            .register(meterRegistry);
+        this.compensateSuccessCounter = Counter.builder("invoice.compensation.success")
+            .description("Number of successful compensations")
+            .register(meterRegistry);
+        this.compensateIdempotentCounter = Counter.builder("invoice.compensation.idempotent")
+            .description("Number of duplicate compensation commands received for an already-deleted invoice")
+            .register(meterRegistry);
+        this.compensateFailureCounter = Counter.builder("invoice.compensation.failure")
+            .description("Number of failed compensation attempts")
+            .register(meterRegistry);
+        this.processingTimer = Timer.builder("invoice.processing.duration")
+            .description("Time taken to process invoices")
+            .register(meterRegistry);
     }
 
     @Override
@@ -64,9 +104,11 @@ public class InvoiceProcessingService
                         String sagaId, SagaStep sagaStep, String correlationId)
             throws InvoiceProcessingException {
         log.info("Processing invoice for saga={} document={}", sagaId, documentId);
+        Timer.Sample sample = Timer.start();
         try {
             if (invoiceRepository.findBySourceInvoiceId(documentId).isPresent()) {
                 log.warn("Invoice already processed for document={}, replying SUCCESS", documentId);
+                processIdempotentCounter.increment();
                 sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
                 return;
             }
@@ -87,6 +129,7 @@ public class InvoiceProcessingService
             invoice.clearDomainEvents();
 
             sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
+            processSuccessCounter.increment();
             log.info("Successfully processed invoice={} for saga={}", invoice.getInvoiceNumber(), sagaId);
 
         } catch (DuplicateKeyException e) {
@@ -95,6 +138,7 @@ public class InvoiceProcessingService
             // violation (e.g. duplicate invoice_number from a different document) is a data error
             // and must fail immediately without a REQUIRES_NEW re-check.
             if (!isSourceInvoiceIdViolation(e)) {
+                processFailureCounter.increment();
                 log.error("Duplicate key violation on non-idempotent constraint for document {}, saga {}: {}",
                         documentId, sagaId, e.toString());
                 sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
@@ -115,11 +159,13 @@ public class InvoiceProcessingService
                     // Concurrent thread committed the same document first; treat as idempotent success.
                     log.warn("Race condition resolved: document {} already committed by concurrent thread — replying SUCCESS",
                             documentId);
+                    processRaceConditionResolvedCounter.increment();
                     sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId);
                 } else {
                     // source_invoice_id index fired but no record found — unexpected state.
                     log.error("DuplicateKeyException on source_invoice_id for document {} but no record found — replying FAILURE",
                             documentId);
+                    processFailureCounter.increment();
                     sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
                             "Duplicate key violation for document " + documentId + ": " + e.toString());
                 }
@@ -132,6 +178,7 @@ public class InvoiceProcessingService
         } catch (DataIntegrityViolationException e) {
             // Other constraint violations (value-too-long, check-constraint, etc.).
             // These are not race-condition duplicates and must not be treated as idempotent.
+            processFailureCounter.increment();
             log.error("Constraint violation (non-duplicate-key) for document {}, saga {}: {}",
                     documentId, sagaId, e.toString());
             sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
@@ -140,6 +187,7 @@ public class InvoiceProcessingService
                     "Constraint violation for document " + documentId, e);
 
         } catch (Exception e) {
+            processFailureCounter.increment();
             log.error("Failed to process invoice for saga={} document={}: {}",
                 sagaId, documentId, e.getMessage(), e);
             // publishFailure uses REQUIRES_NEW — commits independently even if the outer
@@ -150,6 +198,8 @@ public class InvoiceProcessingService
             // and can return normally to Camel, committing the Kafka offset without retrying.
             throw new InvoiceProcessingException(
                 "Failed to process invoice " + documentId + ": " + e, e);
+        } finally {
+            sample.stop(processingTimer);
         }
     }
 
@@ -166,12 +216,17 @@ public class InvoiceProcessingService
                         invoiceRepository.deleteById(invoice.getId());
                         log.info("Deleted ProcessedInvoice id={} for compensation", invoice.getId());
                     },
-                    () -> log.info("No invoice found for document={} — already compensated or never processed",
-                        documentId)
+                    () -> {
+                        compensateIdempotentCounter.increment();
+                        log.info("No invoice found for document={} — already compensated or never processed",
+                            documentId);
+                    }
                 );
 
             sagaReplyPort.publishCompensated(sagaId, sagaStep, correlationId);
+            compensateSuccessCounter.increment();
         } catch (Exception e) {
+            compensateFailureCounter.increment();
             log.error("Failed to compensate invoice for saga={}: {}", sagaId, e.toString(), e);
             // publishFailure uses REQUIRES_NEW — commits in its own transaction even though
             // the outer @Transactional is rolling back.
