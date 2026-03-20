@@ -13,12 +13,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -45,13 +48,23 @@ class InvoiceProcessingServiceTest {
     @Mock
     private InvoiceEventPublishingPort eventPublisher;
 
-    @InjectMocks
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
     private InvoiceProcessingService service;
 
     private ProcessedInvoice validInvoice;
 
     @BeforeEach
     void setUp() {
+        service = new InvoiceProcessingService(
+            invoiceRepository,
+            parserService,
+            sagaReplyPort,
+            eventPublisher,
+            transactionManager
+        );
+
         // Setup valid invoice
         Party seller = Party.of(
             "Seller Company",
@@ -234,49 +247,6 @@ class InvoiceProcessingServiceTest {
     }
 
     @Test
-    void testProcessHandlesRaceCondition() throws Exception {
-        // Given - simulating race condition:
-        // 1. First check returns empty (no existing invoice)
-        // 2. Save throws DataIntegrityViolationException (concurrent insert)
-        // The new implementation treats this as idempotent success
-        when(invoiceRepository.findBySourceInvoiceId("intake-123"))
-            .thenReturn(Optional.empty());  // First call - not found
-
-        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
-        when(invoiceRepository.save(any(ProcessedInvoice.class)))
-            .thenThrow(new DataIntegrityViolationException("Duplicate key"));
-
-        // When
-        service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_INVOICE, "correlation-123");
-
-        // Then - should succeed (idempotent success)
-        verify(invoiceRepository).findBySourceInvoiceId("intake-123");
-        verify(invoiceRepository).save(any(ProcessedInvoice.class));
-        // Event should NOT be published in race condition case
-        verify(eventPublisher, never()).publish(any());
-        // Should publish success for idempotent case
-        verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_INVOICE, "correlation-123");
-    }
-
-    @Test
-    void testProcessPublishesFailureWhenDataIntegrityViolationWithNoInvoice() throws Exception {
-        // Given - DataIntegrityViolationException but invoice still not found
-        // New implementation publishes success for idempotency
-        when(invoiceRepository.findBySourceInvoiceId("intake-123"))
-            .thenReturn(Optional.empty());
-
-        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
-        when(invoiceRepository.save(any(ProcessedInvoice.class)))
-            .thenThrow(new DataIntegrityViolationException("Duplicate key"));
-
-        // When
-        service.process("intake-123", "<xml>test</xml>", "saga-1", SagaStep.PROCESS_INVOICE, "correlation-123");
-
-        // Then - new implementation treats this as idempotent success
-        verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_INVOICE, "correlation-123");
-    }
-
-    @Test
     void testProcessPublishesFailureWhenParsingThrows() throws Exception {
         // Given
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
@@ -292,6 +262,139 @@ class InvoiceProcessingServiceTest {
             eq("correlation-123"), anyString());
         verify(sagaReplyPort, never()).publishSuccess(any(), any(), any());
     }
+
+    // ---- Race-condition (DuplicateKeyException on source_invoice_id) tests ----
+
+    /**
+     * Race condition resolved as success: DuplicateKeyException on source_invoice_id, and the
+     * REQUIRES_NEW re-check finds the document already committed by the concurrent thread.
+     * publishSuccess must be called; InvoiceProcessingException must still propagate so that
+     * Spring does not try to commit the ROLLBACK_ONLY outer transaction.
+     */
+    @Test
+    void testProcessHandlesRaceConditionResolvesAsSuccess() throws Exception {
+        // Given — race condition: idempotency check passes, then insert conflicts
+        // on idx_source_invoice_id, and re-check finds the winning thread's record.
+        // SQLException with SQLState "23505" is required by isSourceInvoiceIdViolation().
+        SQLException sqlCause = new SQLException(
+            "ERROR: duplicate key value violates unique constraint \"idx_source_invoice_id\"", "23505");
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        when(invoiceRepository.findBySourceInvoiceId(anyString()))
+            .thenReturn(Optional.empty())           // 1st call: idempotency check — not yet
+            .thenReturn(Optional.of(validInvoice)); // 2nd call: REQUIRES_NEW re-check — found
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any(ProcessedInvoice.class)))
+            .thenThrow(new DuplicateKeyException("duplicate key", sqlCause));
+
+        // When / Then — exception still propagates (prevents Spring UnexpectedRollbackException)
+        ProcessInvoiceUseCase.InvoiceProcessingException ex =
+            assertThrows(ProcessInvoiceUseCase.InvoiceProcessingException.class,
+                () -> service.process("intake-123", "<xml>test</xml>",
+                                      "saga-1", SagaStep.PROCESS_INVOICE, "correlation-123"));
+        assertInstanceOf(DataIntegrityViolationException.class, ex.getCause());
+
+        // SUCCESS reply published because the document was found on re-check
+        verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_INVOICE, "correlation-123");
+        verify(sagaReplyPort, never()).publishFailure(any(), any(), any(), any());
+
+        // Domain event never published by this thread (the winning thread already did so)
+        verify(eventPublisher, never()).publish(any());
+    }
+
+    /**
+     * Race condition "ghost duplicate": DuplicateKeyException on source_invoice_id, but the
+     * REQUIRES_NEW re-check finds no record (the winning thread rolled back or never committed).
+     * publishFailure must be called; InvoiceProcessingException must propagate.
+     */
+    @Test
+    void testProcessHandlesRaceConditionGhostDuplicate() throws Exception {
+        // Given — idempotency check passes, insert conflicts, re-check finds nothing
+        SQLException sqlCause = new SQLException(
+            "ERROR: duplicate key value violates unique constraint \"idx_source_invoice_id\"", "23505");
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        when(invoiceRepository.findBySourceInvoiceId(anyString()))
+            .thenReturn(Optional.empty());  // both idempotency check and re-check return empty
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any(ProcessedInvoice.class)))
+            .thenThrow(new DuplicateKeyException("duplicate key", sqlCause));
+
+        // When / Then — InvoiceProcessingException propagates with original cause
+        ProcessInvoiceUseCase.InvoiceProcessingException ex =
+            assertThrows(ProcessInvoiceUseCase.InvoiceProcessingException.class,
+                () -> service.process("intake-123", "<xml>test</xml>",
+                                      "saga-1", SagaStep.PROCESS_INVOICE, "correlation-123"));
+        assertInstanceOf(DataIntegrityViolationException.class, ex.getCause());
+
+        // FAILURE reply published because re-check found no record
+        verify(sagaReplyPort).publishFailure(eq("saga-1"), eq(SagaStep.PROCESS_INVOICE),
+            eq("correlation-123"), anyString());
+        verify(sagaReplyPort, never()).publishSuccess(any(), any(), any());
+        verify(eventPublisher, never()).publish(any());
+    }
+
+    /**
+     * A plain DataIntegrityViolationException (value-too-long, check-constraint, etc.)
+     * is NOT a DuplicateKeyException, so it must skip the race-condition re-check entirely
+     * and publish FAILURE immediately.
+     */
+    @Test
+    void testProcessNonDuplicateKeyConstraintViolation() throws Exception {
+        // Given — data-too-long violation, not a duplicate key
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any(ProcessedInvoice.class)))
+            .thenThrow(new DataIntegrityViolationException("value too long for type character varying(500)"));
+
+        // When / Then — InvoiceProcessingException thrown immediately
+        ProcessInvoiceUseCase.InvoiceProcessingException ex =
+            assertThrows(ProcessInvoiceUseCase.InvoiceProcessingException.class,
+                () -> service.process("intake-123", "<xml>test</xml>",
+                                      "saga-1", SagaStep.PROCESS_INVOICE, "correlation-123"));
+        assertInstanceOf(DataIntegrityViolationException.class, ex.getCause());
+        assertTrue(ex.getMessage().contains("Constraint violation"),
+            "Exception message should say 'Constraint violation'; got: " + ex.getMessage());
+
+        // FAILURE reply published; re-check must NOT happen
+        verify(sagaReplyPort).publishFailure(
+            eq("saga-1"), eq(SagaStep.PROCESS_INVOICE), eq("correlation-123"),
+            contains("Constraint violation"));
+        // Re-check must NOT happen — transactionManager.getTransaction never called
+        verify(transactionManager, never()).getTransaction(any());
+        verify(eventPublisher, never()).publish(any());
+    }
+
+    /**
+     * A DuplicateKeyException whose cause message does NOT contain the source_invoice_id
+     * index name (e.g. duplicate invoice_number from a different document) must be treated
+     * as a plain constraint violation — no REQUIRES_NEW re-check.
+     */
+    @Test
+    void testProcessDuplicateKeyOnNonIdempotentConstraint() throws Exception {
+        // Given — invoice_number duplicate: constraint name does NOT contain idx_source_invoice_id
+        SQLException sqlCause = new SQLException(
+            "ERROR: duplicate key value violates unique constraint \"idx_invoice_number_unique\"", "23505");
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any(ProcessedInvoice.class)))
+            .thenThrow(new DuplicateKeyException("duplicate key", sqlCause));
+
+        // When / Then — InvoiceProcessingException thrown immediately
+        ProcessInvoiceUseCase.InvoiceProcessingException ex =
+            assertThrows(ProcessInvoiceUseCase.InvoiceProcessingException.class,
+                () -> service.process("intake-123", "<xml>test</xml>",
+                                      "saga-1", SagaStep.PROCESS_INVOICE, "correlation-123"));
+        assertInstanceOf(DuplicateKeyException.class, ex.getCause());
+
+        // FAILURE reply published with "Constraint violation:" prefix
+        verify(sagaReplyPort).publishFailure(
+            eq("saga-1"), eq(SagaStep.PROCESS_INVOICE), eq("correlation-123"),
+            contains("Constraint violation"));
+        // Re-check must NOT happen
+        verify(transactionManager, never()).getTransaction(any());
+        verify(eventPublisher, never()).publish(any());
+    }
+
+    // ---- Compensation tests ----
 
     @Test
     void testCompensateDeletesInvoice() {
