@@ -2,7 +2,7 @@ package com.wpanther.invoice.processing.infrastructure.adapter.out.messaging;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wpanther.invoice.processing.domain.event.InvoiceProcessedEvent;
+import com.wpanther.invoice.processing.application.dto.event.InvoiceProcessedEvent;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

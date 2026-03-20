@@ -1,4 +1,4 @@
-package com.wpanther.invoice.processing.domain.event;
+package com.wpanther.invoice.processing.application.dto.event;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;

@@ -1,4 +1,4 @@
-package com.wpanther.invoice.processing.domain.event;
+package com.wpanther.invoice.processing.application.dto.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;

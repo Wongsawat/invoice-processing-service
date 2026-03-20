@@ -2,7 +2,7 @@ package com.wpanther.invoice.processing.infrastructure.adapter.out.messaging;
 
 import com.wpanther.invoice.processing.application.port.out.InvoiceEventPublishingPort;
 import com.wpanther.invoice.processing.domain.event.InvoiceProcessedDomainEvent;
-import com.wpanther.invoice.processing.domain.event.InvoiceProcessedEvent;
+import com.wpanther.invoice.processing.application.dto.event.InvoiceProcessedEvent;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
