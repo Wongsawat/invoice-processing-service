@@ -34,7 +34,7 @@ CREATE TABLE invoice_parties (
     street_address VARCHAR(500),
     city VARCHAR(100),
     postal_code VARCHAR(20),
-    country VARCHAR(100) NOT NULL,
+    country VARCHAR(100),
     email VARCHAR(200),
     CONSTRAINT fk_invoice_parties_invoice FOREIGN KEY (invoice_id)
         REFERENCES processed_invoices(id) ON DELETE CASCADE

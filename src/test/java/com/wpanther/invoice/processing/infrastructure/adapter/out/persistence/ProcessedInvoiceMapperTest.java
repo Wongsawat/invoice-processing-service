@@ -305,7 +305,7 @@ class ProcessedInvoiceMapperTest {
         assertNull(sellerEntity.getStreetAddress());
         assertNull(sellerEntity.getCity());
         assertNull(sellerEntity.getPostalCode());
-        assertEquals("UNKNOWN", sellerEntity.getCountry());
+        assertNull(sellerEntity.getCountry());
     }
 
     @Test

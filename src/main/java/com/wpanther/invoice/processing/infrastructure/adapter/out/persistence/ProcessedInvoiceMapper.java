@@ -119,7 +119,7 @@ public class ProcessedInvoiceMapper {
             .streetAddress(domain.address() != null ? domain.address().streetAddress() : null)
             .city(domain.address() != null ? domain.address().city() : null)
             .postalCode(domain.address() != null ? domain.address().postalCode() : null)
-            .country(domain.address() != null ? domain.address().country() : "UNKNOWN")
+            .country(domain.address() != null ? domain.address().country() : null)
             .email(domain.email())
             .build();
     }

@@ -51,7 +51,7 @@ public class InvoicePartyEntity {
     @Column(name = "postal_code", length = 20)
     private String postalCode;
 
-    @Column(name = "country", nullable = false, length = 100)
+    @Column(name = "country", length = 100)
     private String country;
 
     @Column(name = "email", length = 200)
