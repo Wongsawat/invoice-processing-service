@@ -24,9 +24,13 @@ public interface JpaProcessedInvoiceRepository extends JpaRepository<ProcessedIn
     Optional<ProcessedInvoiceEntity> findByInvoiceNumber(String invoiceNumber);
 
     /**
-     * Find by source invoice ID
+     * Find by source invoice ID with parties and line items eagerly loaded (avoids N+1 queries)
      */
-    Optional<ProcessedInvoiceEntity> findBySourceInvoiceId(String sourceInvoiceId);
+    @Query("SELECT i FROM ProcessedInvoiceEntity i " +
+           "LEFT JOIN FETCH i.parties " +
+           "LEFT JOIN FETCH i.lineItems " +
+           "WHERE i.sourceInvoiceId = :sourceInvoiceId")
+    Optional<ProcessedInvoiceEntity> findBySourceInvoiceIdWithDetails(@Param("sourceInvoiceId") String sourceInvoiceId);
 
     /**
      * Find by processing status

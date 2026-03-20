@@ -125,7 +125,7 @@ public class ProcessedInvoiceRepositoryImpl implements ProcessedInvoiceRepositor
     public Optional<ProcessedInvoice> findBySourceInvoiceId(String sourceInvoiceId) {
         log.debug("Finding invoice by source ID: {}", sourceInvoiceId);
 
-        return jpaRepository.findBySourceInvoiceId(sourceInvoiceId)
+        return jpaRepository.findBySourceInvoiceIdWithDetails(sourceInvoiceId)
             .map(entity -> {
                 log.debug("Found invoice: {}", entity.getInvoiceNumber());
                 return mapper.toDomain(entity);
