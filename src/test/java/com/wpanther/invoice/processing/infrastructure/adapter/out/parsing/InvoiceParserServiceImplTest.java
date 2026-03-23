@@ -1951,6 +1951,31 @@ class InvoiceParserServiceImplTest {
     }
 
     @Test
+    void parse_whenExecutorShutDownBeforeSubmit_releasesSemaphoreAndThrows() {
+        // Regression test: before the fix, a RejectedExecutionException thrown by
+        // submit() would leak the semaphore permit because the outer try/finally only
+        // wrapped future.get(), not the submit() call itself.  After maxConcurrentParses
+        // such leaks the service would deadlock on parseSemaphore.acquire().
+        //
+        // Use maxConcurrentParses=1 so that if the permit leaks a second call blocks.
+        InvoiceParserServiceImpl service =
+            new InvoiceParserServiceImpl(1, java.util.concurrent.TimeUnit.SECONDS, 30, 1);
+        service.shutdownExecutor();  // executor is now shut down — submit() will throw
+
+        String anyXml = getSampleInvoiceXml();
+
+        // First call: RejectedExecutionException from submit() must be wrapped in
+        // InvoiceParsingException (forUnmarshal path) and the permit must be released.
+        assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+            () -> service.parse(anyXml, "rejected-1"));
+
+        // Second call: if the permit was leaked the acquire() would block forever.
+        // The fact that it also throws (not hangs) proves the permit was released.
+        assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+            () -> service.parse(anyXml, "rejected-2"));
+    }
+
+    @Test
     void parse_whenSchemeIsUnrecognised_defaultsToVat() throws InvoiceParserPort.InvoiceParsingException {
         // XML with an unrecognised schemeID — should be silently replaced with VAT
         String xmlContent = getInvoiceXmlWithTaxIdNoScheme();

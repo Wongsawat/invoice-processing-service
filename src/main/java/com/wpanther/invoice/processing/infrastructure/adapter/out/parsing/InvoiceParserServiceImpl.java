@@ -277,25 +277,34 @@ public class InvoiceParserServiceImpl implements InvoiceParserPort {
             throw InvoiceParsingException.forInterrupted();
         }
 
-        Future<Invoice_CrossIndustryInvoiceType> future =
-            parseExecutor.submit(() -> doUnmarshal(xmlContent));
-
+        // The outer try/finally wraps submit() as well so that a
+        // RejectedExecutionException (e.g. executor shut down during graceful
+        // shutdown) releases the permit rather than leaking it permanently.
+        // RejectedExecutionException is also caught and wrapped so that callers
+        // only ever see InvoiceParsingException, as declared by InvoiceParserPort.
         try {
-            return future.get(parseTimeoutMs, TimeUnit.MILLISECONDS);
-        } catch (TimeoutException e) {
-            future.cancel(true);
-            throw InvoiceParsingException.forTimeout(parseTimeoutMs);
-        } catch (ExecutionException e) {
-            future.cancel(true);
-            Throwable cause = e.getCause();
-            if (cause instanceof InvoiceParsingException ex) {
-                throw ex;
+            Future<Invoice_CrossIndustryInvoiceType> future =
+                parseExecutor.submit(() -> doUnmarshal(xmlContent));
+
+            try {
+                return future.get(parseTimeoutMs, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException e) {
+                future.cancel(true);
+                throw InvoiceParsingException.forTimeout(parseTimeoutMs);
+            } catch (ExecutionException e) {
+                future.cancel(true);
+                Throwable cause = e.getCause();
+                if (cause instanceof InvoiceParsingException ex) {
+                    throw ex;
+                }
+                throw InvoiceParsingException.forUnmarshal(cause);
+            } catch (InterruptedException e) {
+                future.cancel(true);
+                Thread.currentThread().interrupt();
+                throw InvoiceParsingException.forInterrupted();
             }
-            throw InvoiceParsingException.forUnmarshal(cause);
-        } catch (InterruptedException e) {
-            future.cancel(true);
-            Thread.currentThread().interrupt();
-            throw InvoiceParsingException.forInterrupted();
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            throw InvoiceParsingException.forUnmarshal(e);
         } finally {
             parseSemaphore.release();
         }
