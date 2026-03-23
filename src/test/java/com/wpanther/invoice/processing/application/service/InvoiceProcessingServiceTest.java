@@ -6,6 +6,8 @@ import com.wpanther.invoice.processing.application.port.out.InvoiceEventPublishi
 import com.wpanther.invoice.processing.application.port.out.SagaReplyPort;
 import com.wpanther.invoice.processing.domain.event.InvoiceProcessedDomainEvent;
 import com.wpanther.invoice.processing.domain.model.*;
+import com.wpanther.invoice.processing.domain.model.CompensationLogEntry;
+import com.wpanther.invoice.processing.domain.port.out.CompensationLogRepository;
 import com.wpanther.invoice.processing.domain.port.out.InvoiceParserPort;
 import com.wpanther.invoice.processing.domain.port.out.ProcessedInvoiceRepository;
 import com.wpanther.saga.domain.enums.SagaStep;
@@ -28,6 +30,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -51,6 +54,9 @@ class InvoiceProcessingServiceTest {
     private InvoiceEventPublishingPort eventPublisher;
 
     @Mock
+    private CompensationLogRepository compensationLogRepository;
+
+    @Mock
     private PlatformTransactionManager transactionManager;
 
     private InvoiceProcessingService service;
@@ -64,6 +70,7 @@ class InvoiceProcessingServiceTest {
             parserService,
             sagaReplyPort,
             eventPublisher,
+            compensationLogRepository,
             transactionManager,
             new SimpleMeterRegistry()
         );
@@ -698,5 +705,71 @@ class InvoiceProcessingServiceTest {
         verify(sagaReplyPort).publishFailure(eq("saga-1"), eq(SagaStep.PROCESS_INVOICE),
             eq("correlation-123"), anyString());
         verify(sagaReplyPort, never()).publishCompensated(any(), any(), any());
+    }
+
+    @Test
+    void testCompensateLogsEntryWithCompensatedReason() {
+        when(invoiceRepository.findBySourceInvoiceId("intake-123"))
+            .thenReturn(Optional.of(validInvoice));
+
+        service.compensate("intake-123", "saga-1", SagaStep.PROCESS_INVOICE, "corr-1");
+
+        ArgumentCaptor<CompensationLogEntry> logCaptor =
+            ArgumentCaptor.forClass(CompensationLogEntry.class);
+        verify(compensationLogRepository).save(logCaptor.capture());
+
+        CompensationLogEntry entry = logCaptor.getValue();
+        assertThat(entry.sourceInvoiceId()).isEqualTo("intake-123");
+        assertThat(entry.invoiceId()).isEqualTo(validInvoice.getId());
+        assertThat(entry.invoiceNumber()).isEqualTo(validInvoice.getInvoiceNumber());
+        assertThat(entry.sagaId()).isEqualTo("saga-1");
+        assertThat(entry.correlationId()).isEqualTo("corr-1");
+        assertThat(entry.reason()).isEqualTo(CompensationLogEntry.CompensationReason.COMPENSATED);
+        assertThat(entry.compensatedAt()).isNotNull();
+    }
+
+    @Test
+    void testCompensateLogsEntryWithAlreadyAbsentReasonWhenNotFound() {
+        when(invoiceRepository.findBySourceInvoiceId("intake-456"))
+            .thenReturn(Optional.empty());
+
+        service.compensate("intake-456", "saga-2", SagaStep.PROCESS_INVOICE, "corr-2");
+
+        ArgumentCaptor<CompensationLogEntry> logCaptor =
+            ArgumentCaptor.forClass(CompensationLogEntry.class);
+        verify(compensationLogRepository).save(logCaptor.capture());
+
+        CompensationLogEntry entry = logCaptor.getValue();
+        assertThat(entry.sourceInvoiceId()).isEqualTo("intake-456");
+        assertThat(entry.invoiceId()).isNull();
+        assertThat(entry.invoiceNumber()).isNull();
+        assertThat(entry.reason()).isEqualTo(CompensationLogEntry.CompensationReason.ALREADY_ABSENT);
+    }
+
+    @Test
+    void testCompensateDoesNotLogWhenDeleteThrows() {
+        when(invoiceRepository.findBySourceInvoiceId(anyString()))
+            .thenReturn(Optional.of(validInvoice));
+        doThrow(new RuntimeException("DB error")).when(invoiceRepository).deleteById(any());
+
+        assertThrows(CompensateInvoiceUseCase.InvoiceCompensationException.class,
+            () -> service.compensate("intake-123", "saga-1", SagaStep.PROCESS_INVOICE, "corr-1"));
+
+        verify(compensationLogRepository, never()).save(any());
+    }
+
+    @Test
+    void testCompensateRepliesFailureWhenLogSaveThrows() {
+        when(invoiceRepository.findBySourceInvoiceId(anyString()))
+            .thenReturn(Optional.of(validInvoice));
+        doThrow(new RuntimeException("log table unavailable"))
+            .when(compensationLogRepository).save(any());
+
+        assertThrows(CompensateInvoiceUseCase.InvoiceCompensationException.class,
+            () -> service.compensate("intake-123", "saga-1", SagaStep.PROCESS_INVOICE, "corr-1"));
+
+        verify(invoiceRepository).deleteById(validInvoice.getId());
+        verify(sagaReplyPort).publishFailure(eq("saga-1"), eq(SagaStep.PROCESS_INVOICE),
+            eq("corr-1"), anyString());
     }
 }

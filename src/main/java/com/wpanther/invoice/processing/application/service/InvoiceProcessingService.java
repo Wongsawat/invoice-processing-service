@@ -8,6 +8,8 @@ import com.wpanther.invoice.processing.domain.event.InvoiceProcessedDomainEvent;
 import com.wpanther.invoice.processing.domain.model.InvoiceId;
 import com.wpanther.invoice.processing.domain.model.ProcessedInvoice;
 import com.wpanther.invoice.processing.domain.model.ProcessingStatus;
+import com.wpanther.invoice.processing.domain.model.CompensationLogEntry;
+import com.wpanther.invoice.processing.domain.port.out.CompensationLogRepository;
 import com.wpanther.invoice.processing.domain.port.out.InvoiceParserPort;
 import com.wpanther.invoice.processing.domain.port.out.ProcessedInvoiceRepository;
 import com.wpanther.saga.domain.enums.SagaStep;
@@ -43,6 +45,7 @@ public class InvoiceProcessingService
     private final InvoiceParserPort parserPort;
     private final SagaReplyPort sagaReplyPort;
     private final InvoiceEventPublishingPort eventPublishingPort;
+    private final CompensationLogRepository compensationLogRepository;
 
     // Fresh-transaction executor for replying after a ROLLBACK_ONLY outer transaction
     private final TransactionTemplate requiresNewTemplate;
@@ -62,12 +65,14 @@ public class InvoiceProcessingService
             InvoiceParserPort parserPort,
             SagaReplyPort sagaReplyPort,
             InvoiceEventPublishingPort eventPublishingPort,
+            CompensationLogRepository compensationLogRepository,
             PlatformTransactionManager transactionManager,
             MeterRegistry meterRegistry) {
         this.invoiceRepository = invoiceRepository;
         this.parserPort = parserPort;
         this.sagaReplyPort = sagaReplyPort;
         this.eventPublishingPort = eventPublishingPort;
+        this.compensationLogRepository = compensationLogRepository;
 
         TransactionTemplate template = new TransactionTemplate(transactionManager);
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -276,9 +281,15 @@ public class InvoiceProcessingService
                 .ifPresentOrElse(
                     invoice -> {
                         invoiceRepository.deleteById(invoice.getId());
+                        compensationLogRepository.save(
+                            CompensationLogEntry.compensated(
+                                documentId, invoice.getId(),
+                                invoice.getInvoiceNumber(), sagaId, correlationId));
                         log.info("Deleted ProcessedInvoice id={} for compensation", invoice.getId());
                     },
                     () -> {
+                        compensationLogRepository.save(
+                            CompensationLogEntry.alreadyAbsent(documentId, sagaId, correlationId));
                         compensateIdempotentCounter.increment();
                         log.info("No invoice found for document={} — already compensated or never processed",
                             documentId);
@@ -290,12 +301,8 @@ public class InvoiceProcessingService
         } catch (Exception e) {
             compensateFailureCounter.increment();
             log.error("Failed to compensate invoice for saga={}: {}", sagaId, e.toString(), e);
-            // publishFailure uses REQUIRES_NEW — commits in its own transaction even though
-            // the outer @Transactional is rolling back.
             sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
                 "Compensation failed: " + e);
-            // Rethrow so Camel receives a clean exception and triggers DLC retry.
-            // deleteById is idempotent (no-op if entity is absent), so retries are safe.
             throw new InvoiceCompensationException(
                 "Compensation failed for document " + documentId, e);
         }
