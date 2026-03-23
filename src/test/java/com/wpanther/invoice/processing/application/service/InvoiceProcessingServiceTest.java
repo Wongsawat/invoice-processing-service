@@ -462,6 +462,101 @@ class InvoiceProcessingServiceTest {
         verify(eventPublisher, never()).publish(any());
     }
 
+    // ---- Saga reply error message security tests (no internal detail leakage) ----
+
+    /**
+     * When a generic runtime error occurs, the saga FAILURE reply must not
+     * expose the exception message — which may contain DB internals.
+     */
+    @Test
+    void testPublishFailureMessageExcludesExceptionDetailsOnGenericError() throws Exception {
+        String sensitiveDetail = "relation 'processed_invoices' does not exist";
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parse(anyString(), anyString()))
+            .thenThrow(new RuntimeException(sensitiveDetail));
+
+        assertThrows(ProcessInvoiceUseCase.InvoiceProcessingException.class, () ->
+            service.process("intake-123", "<xml/>", "saga-1", SagaStep.PROCESS_INVOICE, "corr-1")
+        );
+
+        ArgumentCaptor<String> msgCaptor = ArgumentCaptor.forClass(String.class);
+        verify(sagaReplyPort).publishFailure(anyString(), any(), anyString(), msgCaptor.capture());
+        assertFalse(msgCaptor.getValue().contains(sensitiveDetail),
+            "Saga reply must not expose internal error details, got: " + msgCaptor.getValue());
+    }
+
+    /**
+     * When a DataIntegrityViolationException is thrown, the saga FAILURE reply must not
+     * expose the DB-level constraint message.
+     */
+    @Test
+    void testPublishFailureMessageExcludesExceptionDetailsOnConstraintViolation() throws Exception {
+        String sensitiveDetail = "value too long for column 'invoice_number' of table 'processed_invoices'";
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any()))
+            .thenThrow(new DataIntegrityViolationException(sensitiveDetail));
+
+        assertThrows(ProcessInvoiceUseCase.InvoiceProcessingException.class, () ->
+            service.process("intake-123", "<xml/>", "saga-1", SagaStep.PROCESS_INVOICE, "corr-1")
+        );
+
+        ArgumentCaptor<String> msgCaptor = ArgumentCaptor.forClass(String.class);
+        verify(sagaReplyPort).publishFailure(anyString(), any(), anyString(), msgCaptor.capture());
+        assertFalse(msgCaptor.getValue().contains(sensitiveDetail),
+            "Saga reply must not expose constraint details, got: " + msgCaptor.getValue());
+    }
+
+    /**
+     * When a DuplicateKeyException fires on a non-idempotent constraint,
+     * the saga FAILURE reply must not expose the constraint name from the DB error.
+     */
+    @Test
+    void testPublishFailureMessageExcludesExceptionDetailsOnDuplicateKeyNonIdempotent() throws Exception {
+        String sensitiveDetail = "duplicate key value violates unique constraint \"idx_invoice_number_unique\"";
+        SQLException sqlCause = new SQLException(sensitiveDetail, "23505");
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
+        // Use sensitiveDetail as outer message so e.toString() contains it, making the leak detectable
+        when(invoiceRepository.save(any()))
+            .thenThrow(new DuplicateKeyException(sensitiveDetail, sqlCause));
+
+        assertThrows(ProcessInvoiceUseCase.InvoiceProcessingException.class, () ->
+            service.process("intake-123", "<xml/>", "saga-1", SagaStep.PROCESS_INVOICE, "corr-1")
+        );
+
+        ArgumentCaptor<String> msgCaptor = ArgumentCaptor.forClass(String.class);
+        verify(sagaReplyPort).publishFailure(anyString(), any(), anyString(), msgCaptor.capture());
+        assertFalse(msgCaptor.getValue().contains(sensitiveDetail),
+            "Saga reply must not expose constraint name, got: " + msgCaptor.getValue());
+    }
+
+    /**
+     * When the race-condition re-check finds no record (ghost duplicate), the saga
+     * FAILURE reply must not expose the original DuplicateKeyException details.
+     */
+    @Test
+    void testPublishFailureMessageExcludesExceptionDetailsOnRaceConditionGhostDuplicate() throws Exception {
+        String sensitiveDetail = "duplicate key value violates unique constraint \"idx_source_invoice_id\"";
+        // Use sensitiveDetail as both the outer message and the nested cause so e.toString() exposes it
+        SQLException sqlCause = new SQLException(sensitiveDetail, "23505");
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        // idempotency check returns empty; re-check inside REQUIRES_NEW also returns empty
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any()))
+            .thenThrow(new DuplicateKeyException(sensitiveDetail, sqlCause));
+
+        assertThrows(ProcessInvoiceUseCase.InvoiceProcessingException.class, () ->
+            service.process("intake-123", "<xml/>", "saga-1", SagaStep.PROCESS_INVOICE, "corr-1")
+        );
+
+        ArgumentCaptor<String> msgCaptor = ArgumentCaptor.forClass(String.class);
+        verify(sagaReplyPort).publishFailure(anyString(), any(), anyString(), msgCaptor.capture());
+        assertFalse(msgCaptor.getValue().contains(sensitiveDetail),
+            "Saga reply must not expose index name from DB error, got: " + msgCaptor.getValue());
+    }
+
     // ---- FAILED state persistence tests ----
 
     /**

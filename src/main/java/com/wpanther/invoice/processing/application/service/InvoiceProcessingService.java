@@ -191,7 +191,7 @@ public class InvoiceProcessingService
                 log.error("Duplicate key violation on non-idempotent constraint for document {}, saga {}: {}",
                         documentId, sagaId, e.toString());
                 sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
-                        "Constraint violation for document " + documentId + ": " + e.toString());
+                        "Constraint violation processing document " + documentId);
                 throw new InvoiceProcessingException(
                         "Constraint violation for document " + documentId, e);
             }
@@ -216,7 +216,7 @@ public class InvoiceProcessingService
                             documentId);
                     processFailureCounter.increment();
                     sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
-                            "Duplicate key violation for document " + documentId + ": " + e.toString());
+                            "Duplicate key violation processing document " + documentId);
                 }
                 return null;
             });
@@ -231,7 +231,7 @@ public class InvoiceProcessingService
             log.error("Constraint violation (non-duplicate-key) for document {}, saga {}: {}",
                     documentId, sagaId, e.toString());
             sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
-                    "Constraint violation for document " + documentId + ": " + e.toString());
+                    "Constraint violation processing document " + documentId);
             throw new InvoiceProcessingException(
                     "Constraint violation for document " + documentId, e);
 
@@ -253,7 +253,7 @@ public class InvoiceProcessingService
             // publishFailure uses REQUIRES_NEW — commits independently even if the outer
             // transaction is ROLLBACK_ONLY (e.g. after a DB error from save above).
             sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
-                "Processing error for document " + documentId + ": " + e);
+                "Processing error for document " + documentId);
             // Throw so the caller (SagaCommandHandler) knows the FAILURE reply was committed
             // and can return normally to Camel, committing the Kafka offset without retrying.
             throw new InvoiceProcessingException(
