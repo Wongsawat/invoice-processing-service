@@ -129,12 +129,10 @@ public class ProcessedInvoiceMapper {
             ? TaxIdentifier.of(entity.getTaxId(), entity.getTaxIdScheme())
             : null;
 
-        Address address = Address.of(
-            entity.getStreetAddress(),
-            entity.getCity(),
-            entity.getPostalCode(),
-            entity.getCountry()
-        );
+        Address address = (entity.getCountry() != null)
+            ? Address.of(entity.getStreetAddress(), entity.getCity(),
+                         entity.getPostalCode(), entity.getCountry())
+            : null;
 
         return Party.of(entity.getName(), taxId, address, entity.getEmail());
     }

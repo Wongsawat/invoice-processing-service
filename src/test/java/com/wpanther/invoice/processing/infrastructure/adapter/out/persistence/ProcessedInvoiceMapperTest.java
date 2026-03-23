@@ -408,6 +408,33 @@ class ProcessedInvoiceMapperTest {
     }
 
     @Test
+    void toDomain_whenPartyHasNullCountry_returnsPartyWithNullAddress() {
+        // Given: entity where the seller party has null country (address-less party stored in DB)
+        // This is the bug-regression case: previously Address.of(null,null,null,null) threw NPE.
+        ProcessedInvoiceEntity entity = mapper.toEntity(domainInvoice);
+        entity.getParties().removeIf(p -> p.getPartyType() == InvoicePartyEntity.PartyType.SELLER);
+
+        InvoicePartyEntity sellerWithoutAddress = InvoicePartyEntity.builder()
+            .partyType(InvoicePartyEntity.PartyType.SELLER)
+            .name("Seller Without Address")
+            .taxId("1234567890")
+            .taxIdScheme("VAT")
+            .streetAddress(null)
+            .city(null)
+            .postalCode(null)
+            .country(null)
+            .build();
+        entity.addParty(sellerWithoutAddress);
+
+        // When
+        ProcessedInvoice reconstructed = mapper.toDomain(entity);
+
+        // Then — address must be null, not throw
+        assertNotNull(reconstructed.getSeller());
+        assertNull(reconstructed.getSeller().address());
+    }
+
+    @Test
     void toDomain_withNullTaxId_returnsPartyWithNullTaxIdentifier() {
         // Given: entity where the seller party has null taxId (covers the null branch in toPartyDomain)
         ProcessedInvoiceEntity entity = mapper.toEntity(domainInvoice);

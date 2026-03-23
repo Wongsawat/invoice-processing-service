@@ -14,10 +14,10 @@ CREATE TABLE processed_invoices (
     error_message TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0
 );
 
-CREATE INDEX idx_invoice_number ON processed_invoices(invoice_number);
 CREATE UNIQUE INDEX idx_invoice_number_unique ON processed_invoices(invoice_number);
 CREATE UNIQUE INDEX idx_source_invoice_id ON processed_invoices(source_invoice_id);
 CREATE INDEX idx_status ON processed_invoices(status);
