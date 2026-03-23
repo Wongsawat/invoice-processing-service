@@ -367,7 +367,12 @@ public class InvoiceParserServiceImpl implements InvoiceParserPort {
         if (document.getID() == null || document.getID().getValue() == null) {
             throw new InvoiceParsingException("Invoice number (ID) is missing");
         }
-        return document.getID().getValue();
+        String invoiceNumber = document.getID().getValue();
+        if (invoiceNumber.length() > 50) {
+            throw new InvoiceParsingException(
+                "Invoice number exceeds maximum length of 50 characters: " + invoiceNumber.length());
+        }
+        return invoiceNumber;
     }
 
     private LocalDate extractIssueDate(ExchangedDocumentType document)

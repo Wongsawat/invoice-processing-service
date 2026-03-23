@@ -236,6 +236,23 @@ class InvoiceParserServiceImplTest {
     }
 
     @Test
+    void parse_whenInvoiceNumberExceedsMaxLength_throwsInvoiceParsingException() {
+        // Given: invoice number longer than the DB VARCHAR(50) limit
+        String longInvoiceNumber = "IV-" + "X".repeat(50); // 53 characters
+        String xmlContent = getSampleInvoiceXml().replace("IV2025-00001", longInvoiceNumber);
+
+        // When/Then
+        InvoiceParserPort.InvoiceParsingException ex =
+            assertThrows(InvoiceParserPort.InvoiceParsingException.class,
+                () -> parserService.parse(xmlContent, "test-123"));
+
+        assertTrue(ex.getMessage().contains("exceeds maximum length"),
+            "Exception message should mention 'exceeds maximum length'; got: " + ex.getMessage());
+        assertTrue(ex.getMessage().contains("53"),
+            "Exception message should include the actual length; got: " + ex.getMessage());
+    }
+
+    @Test
     void testParseInvoiceWithMissingLineItems() {
         // Given: XML without line items
         String xmlContent = getInvoiceXmlWithoutLineItems();
