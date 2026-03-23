@@ -189,6 +189,15 @@ public class InvoiceParserServiceImpl implements InvoiceParserPort {
     @PreDestroy
     public void shutdownExecutor() {
         parseExecutor.shutdown();
+        try {
+            if (!parseExecutor.awaitTermination(15, TimeUnit.SECONDS)) {
+                log.warn("Parse executor did not terminate within 15 s — forcing shutdown");
+                parseExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            parseExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     // ---- Public API ---------------------------------------------------------
