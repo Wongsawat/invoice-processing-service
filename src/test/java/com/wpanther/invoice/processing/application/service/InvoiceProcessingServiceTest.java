@@ -462,6 +462,93 @@ class InvoiceProcessingServiceTest {
         verify(eventPublisher, never()).publish(any());
     }
 
+    // ---- FAILED state persistence tests ----
+
+    /**
+     * When a runtime exception occurs after the first save (entity persisted as PROCESSING),
+     * the service must update the entity to FAILED status via a new transaction so that
+     * operators can query SELECT * FROM processed_invoices WHERE status = 'FAILED'.
+     */
+    @Test
+    void testProcessPersistsFailedStatusWhenRuntimeExceptionAfterFirstSave() throws Exception {
+        // Given — first save (PROCESSING) succeeds, second save (COMPLETED) throws
+        RuntimeException dbError = new RuntimeException("Transient DB connection lost");
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        when(invoiceRepository.save(any(ProcessedInvoice.class)))
+            .thenReturn(validInvoice)   // call 1: PROCESSING save — succeeds
+            .thenThrow(dbError)         // call 2: COMPLETED save — fails
+            .thenReturn(validInvoice);  // call 3: FAILED save in requiresNew — succeeds
+
+        // When
+        assertThrows(ProcessInvoiceUseCase.InvoiceProcessingException.class, () ->
+            service.process("intake-123", "<xml>test</xml>", "saga-1",
+                           SagaStep.PROCESS_INVOICE, "correlation-123")
+        );
+
+        // Then — third save persists FAILED status so operators can see the document
+        ArgumentCaptor<ProcessedInvoice> saveCaptor = ArgumentCaptor.forClass(ProcessedInvoice.class);
+        verify(invoiceRepository, times(3)).save(saveCaptor.capture());
+        ProcessedInvoice failedSave = saveCaptor.getAllValues().get(2);
+        assertEquals(ProcessingStatus.FAILED, failedSave.getStatus());
+        assertNotNull(failedSave.getErrorMessage());
+
+        // FAILURE saga reply still published
+        verify(sagaReplyPort).publishFailure(eq("saga-1"), eq(SagaStep.PROCESS_INVOICE),
+            eq("correlation-123"), anyString());
+    }
+
+    /**
+     * When an exception occurs BEFORE the first save (e.g. parsing fails),
+     * no entity exists in the DB, so no FAILED save should be attempted.
+     * This is distinct from testProcessPublishesFailureWhenParsingThrows — it
+     * explicitly verifies save() is never called at all.
+     */
+    @Test
+    void testProcessDoesNotSaveFailedStatusWhenExceptionBeforeFirstSave() throws Exception {
+        // Given — parser throws before any save
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parse(anyString(), anyString()))
+            .thenThrow(new RuntimeException("Parse failed"));
+
+        // When
+        assertThrows(ProcessInvoiceUseCase.InvoiceProcessingException.class, () ->
+            service.process("intake-123", "<xml>test</xml>", "saga-1",
+                           SagaStep.PROCESS_INVOICE, "correlation-123")
+        );
+
+        // Then — save never called (no PROCESSING entity in DB to update)
+        verify(invoiceRepository, never()).save(any());
+        verify(transactionManager, never()).getTransaction(any());
+    }
+
+    /**
+     * When an exception occurs AFTER the second save (entity already COMPLETED in DB),
+     * the service must NOT update the entity to FAILED — the DB record is correct.
+     */
+    @Test
+    void testProcessDoesNotSaveFailedStatusWhenExceptionAfterSecondSave() throws Exception {
+        // Given — both saves succeed, but event publishing throws
+        when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
+        when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
+        when(invoiceRepository.save(any(ProcessedInvoice.class))).thenReturn(validInvoice);
+        doThrow(new RuntimeException("Event publish error")).when(eventPublisher).publish(any());
+
+        // When
+        assertThrows(ProcessInvoiceUseCase.InvoiceProcessingException.class, () ->
+            service.process("intake-123", "<xml>test</xml>", "saga-1",
+                           SagaStep.PROCESS_INVOICE, "correlation-123")
+        );
+
+        // Then — only 2 saves (PROCESSING + COMPLETED); no third FAILED save
+        verify(invoiceRepository, times(2)).save(any());
+        // REQUIRES_NEW transaction only for publishFailure, never for a FAILED entity save
+        // (transactionManager may still be called for publishFailure's REQUIRES_NEW)
+        verify(sagaReplyPort).publishFailure(eq("saga-1"), eq(SagaStep.PROCESS_INVOICE),
+            eq("correlation-123"), anyString());
+    }
+
     // ---- Compensation tests ----
 
     @Test

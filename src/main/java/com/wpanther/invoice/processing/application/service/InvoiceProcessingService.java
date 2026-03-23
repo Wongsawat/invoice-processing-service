@@ -105,6 +105,14 @@ public class InvoiceProcessingService
             throws InvoiceProcessingException {
         log.info("Processing invoice for saga={} document={}", sagaId, documentId);
         Timer.Sample sample = Timer.start();
+
+        // Declared outside the try block so the catch block can reference them.
+        // processingStateSaved: first save (PROCESSING) committed — entity exists in DB.
+        // completedStateSaved: second save (COMPLETED) committed — entity is in final state.
+        ProcessedInvoice invoice = null;
+        boolean processingStateSaved = false;
+        boolean completedStateSaved = false;
+
         try {
             // Idempotency check — also resumes partial-failure where a previous attempt
             // saved the entity in PROCESSING state but died before reaching COMPLETED.
@@ -142,20 +150,24 @@ public class InvoiceProcessingService
                     return;
                 }
 
-                // PENDING is never persisted; FAILED not yet implemented.
-                // Surface unexpected state as a clear error rather than silently mis-routing.
+                // PENDING is never persisted; FAILED surfaces here only if a prior run
+                // was killed after persistFailedState() committed but before the outer
+                // transaction rolled back (extremely rare). Treat as an error rather than
+                // silently mis-routing.
                 throw new IllegalStateException(
                     "Invoice for document " + documentId + " has unexpected persisted status: "
                         + existingInvoice.getStatus());
             }
 
-            ProcessedInvoice invoice = parserPort.parse(xmlContent, documentId);
+            invoice = parserPort.parse(xmlContent, documentId);
 
             invoice.startProcessing();
             invoiceRepository.save(invoice);
+            processingStateSaved = true; // entity is now in DB as PROCESSING
 
             invoice.markCompleted();
             invoiceRepository.save(invoice);
+            completedStateSaved = true; // entity is now in DB as COMPLETED
 
             eventPublishingPort.publish(InvoiceProcessedDomainEvent.of(
                 invoice.getId(),
@@ -227,6 +239,17 @@ public class InvoiceProcessingService
             processFailureCounter.increment();
             log.error("Failed to process invoice for saga={} document={}: {}",
                 sagaId, documentId, e.getMessage(), e);
+
+            // Persist FAILED status so operators can query failed documents.
+            // Only attempted when the entity was saved in PROCESSING state but not yet
+            // updated to COMPLETED — i.e., the DB row exists and still shows PROCESSING.
+            // Runs in a REQUIRES_NEW transaction because the outer @Transactional is
+            // ROLLBACK_ONLY at this point. Failure to update FAILED state is logged
+            // as a warning but does not mask the original exception.
+            if (processingStateSaved && !completedStateSaved && invoice != null) {
+                persistFailedState(invoice, e, documentId);
+            }
+
             // publishFailure uses REQUIRES_NEW — commits independently even if the outer
             // transaction is ROLLBACK_ONLY (e.g. after a DB error from save above).
             sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId,
@@ -289,6 +312,34 @@ public class InvoiceProcessingService
     @Transactional(readOnly = true)
     public List<ProcessedInvoice> findByStatus(ProcessingStatus status) {
         return invoiceRepository.findByStatus(status);
+    }
+
+    /**
+     * Persists {@link ProcessingStatus#FAILED} on an invoice that was previously saved as
+     * {@link ProcessingStatus#PROCESSING} but could not reach {@link ProcessingStatus#COMPLETED}.
+     *
+     * <p>Runs in a {@code REQUIRES_NEW} transaction because the outer {@code @Transactional}
+     * is already marked ROLLBACK_ONLY when this method is called from the catch block.
+     * A failure here is logged as a warning and suppressed — the FAILURE saga reply
+     * (published immediately after) is the higher-priority outcome for the orchestrator.
+     *
+     * @param invoice      the domain object to mark as failed (mutated in place)
+     * @param cause        the exception that caused the failure (message stored on the entity)
+     * @param documentId   used only for logging
+     */
+    private void persistFailedState(ProcessedInvoice invoice, Exception cause, String documentId) {
+        try {
+            String errorMessage = cause.getMessage() != null ? cause.getMessage() : cause.getClass().getSimpleName();
+            invoice.markFailed(errorMessage);
+            requiresNewTemplate.execute(txStatus -> {
+                invoiceRepository.save(invoice);
+                return null;
+            });
+            log.info("Persisted FAILED status for invoice document={}", documentId);
+        } catch (Exception saveEx) {
+            log.warn("Failed to persist FAILED status for document={} — entity may remain as PROCESSING: {}",
+                documentId, saveEx.getMessage());
+        }
     }
 
     /**
