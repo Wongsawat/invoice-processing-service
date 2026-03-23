@@ -43,7 +43,7 @@ public interface JpaProcessedInvoiceRepository extends JpaRepository<ProcessedIn
     boolean existsByInvoiceNumber(String invoiceNumber);
 
     /**
-     * Update only the mutable state fields (status, errorMessage, completedAt, updatedAt).
+     * Update only the mutable state fields (status, errorMessage, processedAt, updatedAt).
      * Used by save() on the update path to avoid loading the full entity.
      *
      * <p>{@code i.updatedAt = CURRENT_TIMESTAMP} is set explicitly because this
@@ -57,13 +57,13 @@ public interface JpaProcessedInvoiceRepository extends JpaRepository<ProcessedIn
      */
     @Modifying(clearAutomatically = true)
     @Query("UPDATE ProcessedInvoiceEntity i " +
-           "SET i.status = :status, i.errorMessage = :errorMessage, i.completedAt = :completedAt, " +
+           "SET i.status = :status, i.errorMessage = :errorMessage, i.processedAt = :processedAt, " +
            "    i.updatedAt = CURRENT_TIMESTAMP, i.version = i.version + 1 " +
            "WHERE i.id = :id")
     void updateStatusFields(@Param("id") UUID id,
                             @Param("status") ProcessingStatus status,
                             @Param("errorMessage") String errorMessage,
-                            @Param("completedAt") LocalDateTime completedAt);
+                            @Param("processedAt") LocalDateTime processedAt);
 
     /**
      * Find invoice with parties and line items eagerly loaded

@@ -38,7 +38,7 @@ public class ProcessedInvoiceMapper {
             .status(domain.getStatus())
             .errorMessage(domain.getErrorMessage())
             .createdAt(domain.getCreatedAt())
-            .completedAt(domain.getCompletedAt())
+            .processedAt(domain.getProcessedAt())
             .parties(new HashSet<>())
             .lineItems(new ArrayList<>())
             .build();
@@ -105,7 +105,7 @@ public class ProcessedInvoiceMapper {
             .originalXml(entity.getOriginalXml())
             .status(entity.getStatus())
             .createdAt(entity.getCreatedAt())
-            .completedAt(entity.getCompletedAt())
+            .processedAt(entity.getProcessedAt())
             .errorMessage(entity.getErrorMessage())
             .build();
     }

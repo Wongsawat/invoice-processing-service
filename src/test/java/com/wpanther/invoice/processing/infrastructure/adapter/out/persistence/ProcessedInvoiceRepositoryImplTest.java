@@ -259,7 +259,7 @@ class ProcessedInvoiceRepositoryImplTest {
         Optional<ProcessedInvoice> found = repository.findById(finalInvoice.getId());
         assertTrue(found.isPresent());
         assertEquals(ProcessingStatus.COMPLETED, found.get().getStatus());
-        assertNotNull(found.get().getCompletedAt());
+        assertNotNull(found.get().getProcessedAt());
     }
 
     @Test
@@ -276,7 +276,7 @@ class ProcessedInvoiceRepositoryImplTest {
         assertTrue(found.isPresent());
         assertEquals(ProcessingStatus.FAILED, found.get().getStatus());
         assertEquals("Test error message", found.get().getErrorMessage());
-        assertNotNull(found.get().getCompletedAt());
+        assertNotNull(found.get().getProcessedAt());
     }
 
     @Test

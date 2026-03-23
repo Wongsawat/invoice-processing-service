@@ -74,8 +74,8 @@ public class ProcessedInvoiceEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "completed_at")
-    private LocalDateTime completedAt;
+    @Column(name = "processed_at")
+    private LocalDateTime processedAt;
 
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)

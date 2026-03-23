@@ -41,7 +41,7 @@ public class ProcessedInvoice {
     // Processing Metadata
     private ProcessingStatus status;
     private LocalDateTime createdAt;
-    private LocalDateTime completedAt;
+    private LocalDateTime processedAt;
     private String errorMessage;
 
     // Cached totals (calculated on demand)
@@ -62,7 +62,7 @@ public class ProcessedInvoice {
         this.originalXml = Objects.requireNonNull(builder.originalXml, "Original XML is required");
         this.status = builder.status != null ? builder.status : ProcessingStatus.PENDING;
         this.createdAt = builder.createdAt != null ? builder.createdAt : LocalDateTime.now(ZoneOffset.UTC);
-        this.completedAt = builder.completedAt;
+        this.processedAt = builder.processedAt;
         this.errorMessage = builder.errorMessage;
 
         // Validate business rules
@@ -148,7 +148,7 @@ public class ProcessedInvoice {
             throw new IllegalStateException("Can only complete from PROCESSING status");
         }
         this.status = ProcessingStatus.COMPLETED;
-        this.completedAt = LocalDateTime.now(ZoneOffset.UTC);
+        this.processedAt = LocalDateTime.now(ZoneOffset.UTC);
     }
 
     /**
@@ -157,7 +157,7 @@ public class ProcessedInvoice {
     public void markFailed(String errorMessage) {
         this.status = ProcessingStatus.FAILED;
         this.errorMessage = errorMessage;
-        this.completedAt = LocalDateTime.now(ZoneOffset.UTC);
+        this.processedAt = LocalDateTime.now(ZoneOffset.UTC);
     }
 
     // Getters
@@ -209,8 +209,8 @@ public class ProcessedInvoice {
         return createdAt;
     }
 
-    public LocalDateTime getCompletedAt() {
-        return completedAt;
+    public LocalDateTime getProcessedAt() {
+        return processedAt;
     }
 
     public String getErrorMessage() {
@@ -233,7 +233,7 @@ public class ProcessedInvoice {
         private String originalXml;
         private ProcessingStatus status;
         private LocalDateTime createdAt;
-        private LocalDateTime completedAt;
+        private LocalDateTime processedAt;
         private String errorMessage;
 
         public Builder id(InvoiceId id) {
@@ -301,8 +301,8 @@ public class ProcessedInvoice {
             return this;
         }
 
-        public Builder completedAt(LocalDateTime completedAt) {
-            this.completedAt = completedAt;
+        public Builder processedAt(LocalDateTime processedAt) {
+            this.processedAt = processedAt;
             return this;
         }
 

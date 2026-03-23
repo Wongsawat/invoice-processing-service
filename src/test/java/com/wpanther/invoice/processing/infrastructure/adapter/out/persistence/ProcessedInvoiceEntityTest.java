@@ -31,7 +31,7 @@ class ProcessedInvoiceEntityTest {
         ProcessingStatus status = ProcessingStatus.COMPLETED;
         String errorMessage = "Test error";
         LocalDateTime createdAt = LocalDateTime.now();
-        LocalDateTime completedAt = LocalDateTime.now();
+        LocalDateTime processedAt = LocalDateTime.now();
         LocalDateTime updatedAt = LocalDateTime.now();
 
         // When
@@ -49,7 +49,7 @@ class ProcessedInvoiceEntityTest {
             .status(status)
             .errorMessage(errorMessage)
             .createdAt(createdAt)
-            .completedAt(completedAt)
+            .processedAt(processedAt)
             .updatedAt(updatedAt)
             .parties(new HashSet<>())
             .lineItems(new ArrayList<>())
@@ -69,7 +69,7 @@ class ProcessedInvoiceEntityTest {
         assertEquals(status, entity.getStatus());
         assertEquals(errorMessage, entity.getErrorMessage());
         assertEquals(createdAt, entity.getCreatedAt());
-        assertEquals(completedAt, entity.getCompletedAt());
+        assertEquals(processedAt, entity.getProcessedAt());
         assertEquals(updatedAt, entity.getUpdatedAt());
         assertNotNull(entity.getParties());
         assertNotNull(entity.getLineItems());

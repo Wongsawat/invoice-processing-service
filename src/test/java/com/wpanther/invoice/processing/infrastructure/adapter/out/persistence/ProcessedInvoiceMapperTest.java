@@ -323,7 +323,7 @@ class ProcessedInvoiceMapperTest {
             .currency("THB")
             .originalXml("<xml>test</xml>")
             .status(ProcessingStatus.COMPLETED)
-            .completedAt(LocalDateTime.of(2025, 1, 1, 12, 0))
+            .processedAt(LocalDateTime.of(2025, 1, 1, 12, 0))
             .build();
 
         // When
@@ -331,7 +331,7 @@ class ProcessedInvoiceMapperTest {
 
         // Then
         assertEquals(ProcessingStatus.COMPLETED, entity.getStatus());
-        assertEquals(LocalDateTime.of(2025, 1, 1, 12, 0), entity.getCompletedAt());
+        assertEquals(LocalDateTime.of(2025, 1, 1, 12, 0), entity.getProcessedAt());
     }
 
     @Test

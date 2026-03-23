@@ -75,7 +75,7 @@ public class ProcessedInvoiceRepositoryImpl implements ProcessedInvoiceRepositor
             // Existing entity — update only mutable fields via direct UPDATE,
             // avoiding a full SELECT + dirty-check cycle on every state transition.
             jpaRepository.updateStatusFields(
-                id, invoice.getStatus(), invoice.getErrorMessage(), invoice.getCompletedAt());
+                id, invoice.getStatus(), invoice.getErrorMessage(), invoice.getProcessedAt());
             result = invoice;
         }
 

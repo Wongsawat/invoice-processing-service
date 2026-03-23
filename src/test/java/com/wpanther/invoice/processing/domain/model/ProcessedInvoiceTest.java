@@ -170,7 +170,7 @@ class ProcessedInvoiceTest {
 
         // Then
         assertEquals(ProcessingStatus.COMPLETED, invoice.getStatus());
-        assertNotNull(invoice.getCompletedAt());
+        assertNotNull(invoice.getProcessedAt());
     }
 
     @Test
@@ -194,7 +194,7 @@ class ProcessedInvoiceTest {
         // Then
         assertEquals(ProcessingStatus.FAILED, invoice.getStatus());
         assertEquals(errorMessage, invoice.getErrorMessage());
-        assertNotNull(invoice.getCompletedAt());
+        assertNotNull(invoice.getProcessedAt());
     }
 
     @Test
@@ -364,15 +364,15 @@ class ProcessedInvoiceTest {
     }
 
     @Test
-    void testBuilderWithCompletedAt() {
+    void testBuilderWithProcessedAt() {
         // Given
-        LocalDateTime completedAt = LocalDateTime.of(2025, 1, 1, 12, 0);
+        LocalDateTime processedAt = LocalDateTime.of(2025, 1, 1, 12, 0);
         ProcessedInvoice invoice = validInvoiceBuilder
-            .completedAt(completedAt)
+            .processedAt(processedAt)
             .build();
 
         // When/Then
-        assertEquals(completedAt, invoice.getCompletedAt());
+        assertEquals(processedAt, invoice.getProcessedAt());
     }
 
     @Test
@@ -400,7 +400,7 @@ class ProcessedInvoiceTest {
 
         invoice.markCompleted();
         assertEquals(ProcessingStatus.COMPLETED, invoice.getStatus());
-        assertNotNull(invoice.getCompletedAt());
+        assertNotNull(invoice.getProcessedAt());
     }
 
     @Test
@@ -448,7 +448,7 @@ class ProcessedInvoiceTest {
         assertEquals("<xml>test</xml>", invoice.getOriginalXml());
         assertEquals(ProcessingStatus.PENDING, invoice.getStatus());
         assertNotNull(invoice.getCreatedAt());
-        assertNull(invoice.getCompletedAt());
+        assertNull(invoice.getProcessedAt());
         assertNull(invoice.getErrorMessage());
     }
 
