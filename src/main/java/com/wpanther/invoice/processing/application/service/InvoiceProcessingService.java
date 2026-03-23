@@ -292,6 +292,14 @@ public class InvoiceProcessingService
     }
 
     /**
+     * The name of the unique index on {@code processed_invoices.source_invoice_id},
+     * as declared in the Flyway V1 migration. Published as a package-visible constant
+     * so that {@code SchemaInvariantValidator} can verify the index exists at startup
+     * without duplicating the literal string.
+     */
+    public static final String SOURCE_INVOICE_ID_INDEX = "idx_source_invoice_id";
+
+    /**
      * Returns {@code true} only when the exception is specifically a unique_violation
      * on the {@code idx_source_invoice_id} index — the sole case that indicates a
      * concurrent insert of the same document rather than a genuine data error.
@@ -303,13 +311,14 @@ public class InvoiceProcessingService
      *   <li><b>Index name in the message</b> — narrows the match to
      *       <em>this specific</em> index so that a duplicate {@code invoice_number}
      *       (a different unique index) is not treated as an idempotent race condition.
-     *       The index name is set by Flyway V1 and must stay in sync if ever renamed.</li>
+     *       The index name is declared in {@link #SOURCE_INVOICE_ID_INDEX} and verified
+     *       at startup by {@code SchemaInvariantValidator}.</li>
      * </ol>
      */
     private static boolean isSourceInvoiceIdViolation(DuplicateKeyException e) {
         Throwable cause = e.getMostSpecificCause();
         String msg = cause.getMessage();
-        if (msg == null || !msg.contains("idx_source_invoice_id")) {
+        if (msg == null || !msg.contains(SOURCE_INVOICE_ID_INDEX)) {
             return false;
         }
         // Walk the cause chain for a SQLException carrying SQLState "23505".
