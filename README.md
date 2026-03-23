@@ -1,28 +1,39 @@
 # Invoice Processing Service
 
-Microservice for processing and enriching Thai e-Tax invoice data in the Invoice Processing System.
+Microservice for processing and enriching Thai e-Tax invoice data as a participant in the Saga Orchestration pipeline.
 
 ## Overview
 
 The Invoice Processing Service is responsible for:
 
-- **Receiving** validated invoices from the Document Intake Service via Kafka
+- **Receiving** `ProcessInvoiceCommand` from the Orchestrator Service via Kafka
 - **Parsing** XML invoices using the teda library v1.0.0
-- **Enriching** invoice data with business logic
 - **Calculating** totals, taxes, and other derived values
-- **Publishing** processed invoice events
-- **Requesting** XML signing for downstream services
+- **Persisting** processed invoice data to PostgreSQL
+- **Logging** compensation events to a permanent audit trail
+- **Replying** to the Orchestrator with success or failure via the Transactional Outbox pattern
 
 ## Architecture
 
-### Domain-Driven Design
+### Domain-Driven Design (Hexagonal)
 
-This service follows DDD principles with:
+```
+domain/
+├── model/        # ProcessedInvoice (aggregate root), value objects, CompensationLogEntry
+├── port/
+│   └── out/      # Repository and publisher interfaces (ProcessedInvoiceRepository,
+│                 #   CompensationLogRepository, InvoiceParserPort)
+└── event/        # Kafka DTOs
 
-- **Aggregates**: `ProcessedInvoice` (root)
-- **Value Objects**: `Money`, `Address`, `Party`, `LineItem`, `TaxIdentifier`
-- **Domain Services**: `InvoiceParserService`
-- **Repositories**: `ProcessedInvoiceRepository`
+application/
+└── service/      # InvoiceProcessingService, SagaCommandHandler
+
+infrastructure/
+├── adapter/out/persistence/  # JPA entities, Spring Data repositories, mappers
+├── messaging/                # EventPublisher, SagaReplyPublisher
+├── service/                  # InvoiceParserServiceImpl (teda XML parsing)
+└── config/                   # Camel routes, OutboxConfig
+```
 
 ### Technology Stack
 
@@ -30,57 +41,90 @@ This service follows DDD principles with:
 |-----------|------------|
 | Language | Java 21 |
 | Framework | Spring Boot 3.2.5 |
-| Database | PostgreSQL |
+| Message Routing | Apache Camel 4.14.4 |
+| Database | PostgreSQL (`process_db`) |
 | Messaging | Apache Kafka |
 | Service Discovery | Netflix Eureka |
 | Database Migration | Flyway |
 | XML Parsing | teda Library v1.0.0 |
+| Metrics | Micrometer / Prometheus |
+
+### Saga Orchestration
+
+This service is a **Saga participant**. It does not initiate sagas — it responds to commands from the Orchestrator Service.
+
+```
+[Orchestrator] → saga.command.invoice → [InvoiceRouteConfig]
+                                              ↓
+                                      SagaCommandHandler
+                                              ↓
+                                      InvoiceProcessingService
+                                      (parse → save → outbox)
+                                              ↓
+                                      outbox_events → Debezium CDC
+                                              ↓
+                                      saga.reply.invoice → [Orchestrator]
+```
+
+**Compensation** (`saga.compensation.invoice`): Hard-deletes the `ProcessedInvoice` row by `documentId` and writes a `CompensationLogEntry` atomically, then replies COMPENSATED.
 
 ## Database Schema
 
-### Tables
+Four tables managed by Flyway:
 
-1. **processed_invoices** - Main invoice data
-2. **invoice_parties** - Seller and buyer information
-3. **invoice_line_items** - Invoice line items with quantities and prices
+| Table | Purpose |
+|-------|---------|
+| `processed_invoices` | Main invoice data (aggregate root) |
+| `invoice_parties` | Seller and buyer information |
+| `invoice_line_items` | Line items with quantities and prices |
+| `outbox_events` | Transactional outbox for Debezium CDC |
+| `compensation_log` | Permanent audit trail of saga compensation events (never deleted) |
 
-## Kafka Integration
+## Kafka Topics
 
-### Consumed Events
+### Consumed
 
-| Event | Topic | Description |
-|-------|-------|-------------|
-| `InvoiceReceivedEvent` | `document.received.invoice` | Invoice validated by Document Intake Service |
+| Topic | Command Class | Handler |
+|-------|--------------|---------|
+| `saga.command.invoice` | `ProcessInvoiceCommand` | `SagaCommandHandler.handleProcessCommand()` |
+| `saga.compensation.invoice` | `CompensateInvoiceCommand` | `SagaCommandHandler.handleCompensation()` |
 
-### Published Events
+Both routes use `groupId=invoice-processing-service`, 3 consumers, manual acknowledgment.
 
-| Event | Topic | Description |
-|-------|-------|-------------|
-| `InvoiceProcessedEvent` | `invoice.processed` | Invoice processing completed |
-| `XmlSigningRequestedEvent` | `xml.signing.requested` | Request XML signing (XAdES) |
+### Published (via Outbox)
+
+| Topic | Event Class | Trigger |
+|-------|------------|---------|
+| `saga.reply.invoice` | `InvoiceReplyEvent` | After every process/compensate call |
+| `invoice.processed` | `InvoiceProcessedEvent` | After successful processing (notification) |
+
+Dead letter: `invoice.processing.dlq`
 
 ## Configuration
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DB_HOST` | PostgreSQL host | `localhost` |
-| `DB_PORT` | PostgreSQL port | `5432` |
-| `DB_NAME` | Database name | `process_db` |
-| `DB_USERNAME` | Database username | `postgres` |
-| `DB_PASSWORD` | Database password | `postgres` |
-| `KAFKA_BROKERS` | Kafka bootstrap servers | `localhost:9092` |
-| `EUREKA_URL` | Eureka server URL | `http://localhost:8761/eureka/` |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_HOST` | `localhost` | PostgreSQL host |
+| `DB_PORT` | `5432` | PostgreSQL port |
+| `DB_NAME` | `process_db` | Database name |
+| `DB_USERNAME` | `postgres` | Database username |
+| `DB_PASSWORD` | `postgres` | Database password |
+| `KAFKA_BROKERS` | `localhost:9092` | Kafka bootstrap servers |
+| `EUREKA_URL` | `http://localhost:8761/eureka/` | Eureka server URL |
+
+Service runs on port **8082**.
 
 ## Running the Service
 
 ### Prerequisites
 
-1. PostgreSQL database running
+1. PostgreSQL running with `process_db` database
 2. Kafka broker running
 3. Eureka server running (optional)
-4. Thai e-Tax Invoice library (teda v1.0.0) installed locally
+4. teda library installed: `cd ../../../teda && mvn clean install`
+5. saga-commons library installed: `cd ../../../saga-commons && mvn clean install`
 
 ### Build
 
@@ -91,7 +135,6 @@ mvn clean package
 ### Run Locally
 
 ```bash
-# Set environment variables
 export DB_HOST=localhost
 export DB_PORT=5432
 export DB_NAME=process_db
@@ -99,17 +142,14 @@ export DB_USERNAME=postgres
 export DB_PASSWORD=your_password
 export KAFKA_BROKERS=localhost:9092
 
-# Run application
 mvn spring-boot:run
 ```
 
 ### Run with Docker
 
 ```bash
-# Build image
 docker build -t invoice-processing-service:latest .
 
-# Run container
 docker run -p 8082:8082 \
   -e DB_HOST=postgres \
   -e DB_PORT=5432 \
@@ -122,156 +162,53 @@ docker run -p 8082:8082 \
 
 ## API Endpoints
 
-### Health Check
+This service is **event-driven only** — no REST endpoints for business operations.
 
-```bash
+### Actuator
+
+```
 GET http://localhost:8082/actuator/health
-```
-
-### Metrics
-
-```bash
-GET http://localhost:8082/actuator/metrics
 GET http://localhost:8082/actuator/prometheus
+GET http://localhost:8082/actuator/camelroutes
 ```
 
-## Development
-
-### Project Structure
-
-```
-src/main/java/com/wpanther/invoice/processing/
-├── InvoiceProcessingServiceApplication.java
-├── domain/
-│   ├── model/              # Domain models (aggregates, value objects)
-│   ├── repository/         # Repository interfaces
-│   ├── service/            # Domain services
-│   └── event/              # Integration events
-├── application/
-│   └── service/            # Application services
-└── infrastructure/
-    ├── persistence/        # JPA entities, repositories
-    ├── messaging/          # Kafka consumers, publishers
-    └── config/             # Configuration classes
-```
-
-### Building
+## Testing
 
 ```bash
-# Clean and build
-mvn clean package
-
-# Skip tests
-mvn clean package -DskipTests
-
-# Run tests only
+# Unit tests
 mvn test
+
+# Unit tests + JaCoCo coverage check (85% line coverage per package required)
+mvn verify
+
+# Single test
+mvn test -Dtest=InvoiceProcessingServiceTest
+
+# Integration tests (requires Docker/Podman)
+mvn verify -P integration
 ```
 
 ### Database Migrations
 
-Flyway migrations are located in `src/main/resources/db/migration/`.
-
 ```bash
-# Run migrations
 mvn flyway:migrate
-
-# Check migration status
 mvn flyway:info
 ```
 
-## Integration with teda Library
-
-This service uses the Thai e-Tax Invoice library (teda v1.0.0) for:
-
-- XML parsing and validation
-- JAXB class generation
-- Database-backed code lists
-
-The service expects XML documents with the `Invoice_CrossIndustryInvoice` root element (teda 1.0.0 namespace).
-
 ## Monitoring
 
-### Metrics
+### Custom Metrics (Prometheus)
 
-The service exposes Prometheus metrics at `/actuator/prometheus`:
-
-- `kafka_consumer_fetch_manager_records_lag` - Consumer lag
-- `jvm_memory_used_bytes` - JVM memory usage
-- Custom business metrics
-
-### Logging
-
-Structured logging is configured for:
-
-- Application events
-- Kafka message processing
-- Database operations
-- Error tracking
-
-## Testing
-
-### Unit Tests
-
-```bash
-mvn test
-```
-
-### Integration Tests
-
-```bash
-mvn verify
-```
-
-## Event Flow
-
-```
-Document Intake Service
-        │
-        ▼
-   (document.received.invoice)
-        │
-        ▼
-┌─────────────────────────────┐
-│  Invoice Processing Service │
-│                             │
-│  1. Parse XML (teda 1.0.0)  │
-│  2. Validate                │
-│  3. Calculate totals        │
-│  4. Save to DB              │
-└──────────┬──────────────────┘
-           │
-           ▼
-    (invoice.processed)
-           │
-           ├──▶ Notification Service
-           │
-           ▼
-   (xml.signing.requested)
-           │
-           ▼
-    XML Signing Service
-```
-
-## Version 1.0.0 Changes
-
-### Package Rename
-- Changed from `com.invoice.processing` to `com.wpanther.invoice.processing`
-- Maven groupId changed from `com.invoice` to `com.wpanther`
-
-### Kafka Integration Update
-- Now consumes from `document.received.invoice` topic
-- `InvoiceReceivedEvent` uses `documentId` field instead of `invoiceId`
-
-### teda Library Upgrade
-- Upgraded from 1.0.0-SNAPSHOT to 1.0.0
-- Root element: `Invoice_CrossIndustryInvoice` (was `TaxInvoice_CrossIndustryInvoice`)
-- JAXB packages: `com.wpanther.etax.generated.invoice.*` (was `taxinvoice.*`)
-
-### Event Flow Update
-- Service now publishes `XmlSigningRequestedEvent` (removed `PdfGenerationRequestedEvent`)
-- XML Signing Service handles XAdES signatures before PDF generation
-- Correct flow: Invoice Processing → XML Signing → PDF Generation (via xml.signed topic)
+| Metric | Description |
+|--------|-------------|
+| `invoice.processing.success` | Successfully processed invoices |
+| `invoice.processing.failure` | Failed processing attempts |
+| `invoice.processing.idempotent` | Duplicate commands handled idempotently |
+| `invoice.processing.race_condition_resolved` | Concurrent-insert races resolved as idempotent |
+| `invoice.processing.duration` | Processing time histogram |
+| `invoice.compensation.success` | Successful compensations |
+| `invoice.compensation.idempotent` | Compensation commands for already-absent invoices |
+| `invoice.compensation.failure` | Failed compensation attempts |
 
 ## License
 
