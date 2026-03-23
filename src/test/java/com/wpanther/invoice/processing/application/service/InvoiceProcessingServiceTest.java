@@ -18,11 +18,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.ServerErrorMessage;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
 import java.math.BigDecimal;
-import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -343,16 +344,19 @@ class InvoiceProcessingServiceTest {
     void testProcessHandlesRaceConditionResolvesAsSuccess() throws Exception {
         // Given — race condition: idempotency check passes, then insert conflicts
         // on idx_source_invoice_id, and re-check finds the winning thread's record.
-        // SQLException with SQLState "23505" is required by isSourceInvoiceIdViolation().
-        SQLException sqlCause = new SQLException(
-            "ERROR: duplicate key value violates unique constraint \"idx_source_invoice_id\"", "23505");
+        // PSQLException with ServerErrorMessage.getConstraint() == idx_source_invoice_id
+        // is required by the structured-error detection in isSourceInvoiceIdViolation().
+        PSQLException psqlCause = mock(PSQLException.class);
+        ServerErrorMessage sem = mock(ServerErrorMessage.class);
+        when(psqlCause.getServerErrorMessage()).thenReturn(sem);
+        when(sem.getConstraint()).thenReturn(InvoiceProcessingService.SOURCE_INVOICE_ID_INDEX);
         when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         when(invoiceRepository.findBySourceInvoiceId(anyString()))
             .thenReturn(Optional.empty())           // 1st call: idempotency check — not yet
             .thenReturn(Optional.of(validInvoice)); // 2nd call: REQUIRES_NEW re-check — found
         when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedInvoice.class)))
-            .thenThrow(new DuplicateKeyException("duplicate key", sqlCause));
+            .thenThrow(new DuplicateKeyException("duplicate key", psqlCause));
 
         // When / Then — exception still propagates (prevents Spring UnexpectedRollbackException)
         ProcessInvoiceUseCase.InvoiceProcessingException ex =
@@ -377,14 +381,16 @@ class InvoiceProcessingServiceTest {
     @Test
     void testProcessHandlesRaceConditionGhostDuplicate() throws Exception {
         // Given — idempotency check passes, insert conflicts, re-check finds nothing
-        SQLException sqlCause = new SQLException(
-            "ERROR: duplicate key value violates unique constraint \"idx_source_invoice_id\"", "23505");
+        PSQLException psqlCause = mock(PSQLException.class);
+        ServerErrorMessage sem = mock(ServerErrorMessage.class);
+        when(psqlCause.getServerErrorMessage()).thenReturn(sem);
+        when(sem.getConstraint()).thenReturn(InvoiceProcessingService.SOURCE_INVOICE_ID_INDEX);
         when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         when(invoiceRepository.findBySourceInvoiceId(anyString()))
             .thenReturn(Optional.empty());  // both idempotency check and re-check return empty
         when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedInvoice.class)))
-            .thenThrow(new DuplicateKeyException("duplicate key", sqlCause));
+            .thenThrow(new DuplicateKeyException("duplicate key", psqlCause));
 
         // When / Then — InvoiceProcessingException propagates with original cause
         ProcessInvoiceUseCase.InvoiceProcessingException ex =
@@ -438,13 +444,12 @@ class InvoiceProcessingServiceTest {
      */
     @Test
     void testProcessDuplicateKeyOnNonIdempotentConstraint() throws Exception {
-        // Given — invoice_number duplicate: constraint name does NOT contain idx_source_invoice_id
-        SQLException sqlCause = new SQLException(
-            "ERROR: duplicate key value violates unique constraint \"idx_invoice_number_unique\"", "23505");
+        // Given — invoice_number duplicate: no PSQLException in cause chain, so
+        // isSourceInvoiceIdViolation() returns false and the path is treated as a plain constraint error.
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
         when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any(ProcessedInvoice.class)))
-            .thenThrow(new DuplicateKeyException("duplicate key", sqlCause));
+            .thenThrow(new DuplicateKeyException("duplicate key"));
 
         // When / Then — InvoiceProcessingException thrown immediately
         ProcessInvoiceUseCase.InvoiceProcessingException ex =
@@ -514,12 +519,12 @@ class InvoiceProcessingServiceTest {
     @Test
     void testPublishFailureMessageExcludesExceptionDetailsOnDuplicateKeyNonIdempotent() throws Exception {
         String sensitiveDetail = "duplicate key value violates unique constraint \"idx_invoice_number_unique\"";
-        SQLException sqlCause = new SQLException(sensitiveDetail, "23505");
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
         when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
-        // Use sensitiveDetail as outer message so e.toString() contains it, making the leak detectable
+        // Use sensitiveDetail as outer message so e.toString() contains it, making the leak detectable.
+        // No PSQLException in cause chain, so isSourceInvoiceIdViolation() returns false.
         when(invoiceRepository.save(any()))
-            .thenThrow(new DuplicateKeyException(sensitiveDetail, sqlCause));
+            .thenThrow(new DuplicateKeyException(sensitiveDetail));
 
         assertThrows(ProcessInvoiceUseCase.InvoiceProcessingException.class, () ->
             service.process("intake-123", "<xml/>", "saga-1", SagaStep.PROCESS_INVOICE, "corr-1")
@@ -538,14 +543,18 @@ class InvoiceProcessingServiceTest {
     @Test
     void testPublishFailureMessageExcludesExceptionDetailsOnRaceConditionGhostDuplicate() throws Exception {
         String sensitiveDetail = "duplicate key value violates unique constraint \"idx_source_invoice_id\"";
-        // Use sensitiveDetail as both the outer message and the nested cause so e.toString() exposes it
-        SQLException sqlCause = new SQLException(sensitiveDetail, "23505");
+        // PSQLException mock triggers race-condition detection; sensitiveDetail in outer message
+        // makes any leak detectable via e.toString().
+        PSQLException psqlCause = mock(PSQLException.class);
+        ServerErrorMessage sem = mock(ServerErrorMessage.class);
+        when(psqlCause.getServerErrorMessage()).thenReturn(sem);
+        when(sem.getConstraint()).thenReturn(InvoiceProcessingService.SOURCE_INVOICE_ID_INDEX);
         when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         // idempotency check returns empty; re-check inside REQUIRES_NEW also returns empty
         when(invoiceRepository.findBySourceInvoiceId(anyString())).thenReturn(Optional.empty());
         when(parserService.parse(anyString(), anyString())).thenReturn(validInvoice);
         when(invoiceRepository.save(any()))
-            .thenThrow(new DuplicateKeyException(sensitiveDetail, sqlCause));
+            .thenThrow(new DuplicateKeyException(sensitiveDetail, psqlCause));
 
         assertThrows(ProcessInvoiceUseCase.InvoiceProcessingException.class, () ->
             service.process("intake-123", "<xml/>", "saga-1", SagaStep.PROCESS_INVOICE, "corr-1")

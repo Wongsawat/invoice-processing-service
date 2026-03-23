@@ -104,10 +104,11 @@
         </dependency>
 
         <!-- PostgreSQL Driver -->
+        <!-- compile scope (not runtime) because InvoiceProcessingService uses
+             PSQLException / ServerErrorMessage for structured constraint-name detection. -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
         </dependency>
 
         <!-- Flyway for database migrations -->

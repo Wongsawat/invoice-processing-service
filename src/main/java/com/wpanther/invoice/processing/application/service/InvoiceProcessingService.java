@@ -23,7 +23,9 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.sql.SQLException;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.ServerErrorMessage;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -355,27 +357,21 @@ public class InvoiceProcessingService
      * on the {@code idx_source_invoice_id} index — the sole case that indicates a
      * concurrent insert of the same document rather than a genuine data error.
      *
-     * <p>Detection strategy (two independent guards, both must match):
-     * <ol>
-     *   <li><b>SQLState "23505"</b> — the ANSI / PostgreSQL / H2 code for
-     *       {@code unique_violation}. Stable across DB versions and drivers.</li>
-     *   <li><b>Index name in the message</b> — narrows the match to
-     *       <em>this specific</em> index so that a duplicate {@code invoice_number}
-     *       (a different unique index) is not treated as an idempotent race condition.
-     *       The index name is declared in {@link #SOURCE_INVOICE_ID_INDEX} and verified
-     *       at startup by {@code SchemaInvariantValidator}.</li>
-     * </ol>
+     * <p>Detection strategy: walk the cause chain for a {@link PSQLException} and read
+     * the constraint name from the structured PostgreSQL error protocol via
+     * {@link ServerErrorMessage#getConstraint()}. This is reliable across all PostgreSQL
+     * versions because the constraint name is a first-class field in the wire protocol
+     * (error message field 'n'), not parsed from a human-readable string.
+     *
+     * <p>Falls back to {@code false} (treat as data error) on any other JDBC driver,
+     * which is the safe default — the call site will reply FAILURE rather than silently
+     * swallowing a genuine constraint violation.
      */
     private static boolean isSourceInvoiceIdViolation(DuplicateKeyException e) {
-        Throwable cause = e.getMostSpecificCause();
-        String msg = cause.getMessage();
-        if (msg == null || !msg.contains(SOURCE_INVOICE_ID_INDEX)) {
-            return false;
-        }
-        // Walk the cause chain for a SQLException carrying SQLState "23505".
         for (Throwable t = e; t != null; t = t.getCause()) {
-            if (t instanceof SQLException sqlEx && "23505".equals(sqlEx.getSQLState())) {
-                return true;
+            if (t instanceof PSQLException psql) {
+                ServerErrorMessage sem = psql.getServerErrorMessage();
+                return sem != null && SOURCE_INVOICE_ID_INDEX.equals(sem.getConstraint());
             }
         }
         return false;
