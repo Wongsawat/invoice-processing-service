@@ -66,21 +66,42 @@ public class SagaCommandHandler {
      * <h3>Exception contract</h3>
      * <p>On success, {@code compensate()} commits a COMPENSATED reply and returns normally.
      *
-     * <p>On failure, {@code compensate()} commits a FAILURE reply (via its own
-     * {@code REQUIRES_NEW} transaction) and throws
-     * {@link CompensateInvoiceUseCase.InvoiceCompensationException}.
-     * That exception propagates to Camel's Dead Letter Channel, triggering a retry.
-     * Retries are safe because {@code deleteById} is a no-op when the entity is absent.
+     * <p>{@link CompensateInvoiceUseCase.InvoiceCompensationException} is thrown by
+     * {@code compensate()} <em>only after</em> the FAILURE saga reply has been successfully
+     * committed to the outbox table (via a {@code REQUIRES_NEW} inner transaction).
+     * Catching it here and returning normally tells Camel "this message is done" — the
+     * Kafka offset is committed and the orchestrator already has the FAILURE reply.
+     *
+     * <p>Propagating would trigger a Camel retry. On retry, the invoice is absent, so
+     * a COMPENSATED reply is committed. The orchestrator then receives FAILURE followed by
+     * COMPENSATED for the same step. Because the orchestrator's retry counter is already
+     * exhausted (it was exhausted during the forward phase that triggered compensation),
+     * it cannot find a matching SENT command record for the COMPENSATED reply. It then
+     * falls through to {@code advanceTo(nextStep)} on a COMPENSATING-state saga, which
+     * throws {@code IllegalStateException("Can only advance when saga is IN_PROGRESS")}.
+     *
+     * <p>Any <em>other</em> exception (e.g., a transient DB outage that prevented
+     * {@code publishFailure()} from committing) is intentionally <em>not</em> caught.
+     * It propagates to the Camel dead-letter channel, which retries the compensation
+     * message. On retry, the idempotent {@code alreadyAbsent} path handles the deleted
+     * invoice correctly without sending a conflicting reply.
      */
     public void handleCompensation(CompensateInvoiceCommand command) {
         log.info("Handling compensation for saga {} document {}",
             command.getSagaId(), command.getDocumentId());
 
-        compensateInvoiceUseCase.compensate(
-            command.getDocumentId(),
-            command.getSagaId(),
-            command.getSagaStep(),
-            command.getCorrelationId()
-        );
+        try {
+            compensateInvoiceUseCase.compensate(
+                command.getDocumentId(),
+                command.getSagaId(),
+                command.getSagaStep(),
+                command.getCorrelationId()
+            );
+        } catch (CompensateInvoiceUseCase.InvoiceCompensationException e) {
+            // FAILURE reply was already committed to the outbox by the use case.
+            // Return normally so Camel commits the Kafka offset.
+            log.error("Failed to compensate invoice for saga {}: {}",
+                command.getSagaId(), e.toString(), e);
+        }
     }
 }

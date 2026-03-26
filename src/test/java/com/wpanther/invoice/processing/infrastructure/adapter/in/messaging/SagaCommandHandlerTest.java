@@ -15,6 +15,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -118,8 +120,12 @@ class SagaCommandHandlerTest {
     }
 
     @Test
-    void shouldPropagateExceptionFromCompensateUseCase() {
-        // Given — compensation failed; publishFailure already committed via REQUIRES_NEW
+    void shouldSwallowInvoiceCompensationExceptionFromCompensateUseCase() {
+        // Given — use case committed FAILURE reply (via REQUIRES_NEW) and then threw.
+        // The FAILURE reply is already in the outbox; the orchestrator will handle retry.
+        // Propagating here would cause Camel to retry, sending a COMPENSATED reply that
+        // arrives at the orchestrator after the FAILURE reply, crashing its state machine
+        // when it tries to advance a COMPENSATING-state saga to the next forward step.
         CompensateInvoiceCommand command = new CompensateInvoiceCommand(
             "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "process-invoice", "doc-001", "invoice"
         );
@@ -127,12 +133,26 @@ class SagaCommandHandlerTest {
                 "Compensation error", new RuntimeException("DB error")))
             .when(compensateInvoiceUseCase).compensate(any(), any(), any(), any());
 
-        // When/Then — propagates to Camel DLC for retry (deleteById is idempotent)
-        try {
-            sagaCommandHandler.handleCompensation(command);
-        } catch (CompensateInvoiceUseCase.InvoiceCompensationException e) {
-            // Expected
-        }
+        // When/Then — handler catches it and returns normally; Kafka offset is committed,
+        // no Camel retry, no conflicting COMPENSATED reply to the orchestrator.
+        assertDoesNotThrow(() -> sagaCommandHandler.handleCompensation(command));
+
+        verify(compensateInvoiceUseCase).compensate(any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldPropagateUnexpectedExceptionFromCompensateUseCase() {
+        // Given — unexpected exception (e.g., DB outage prevented publishFailure from committing).
+        // No FAILURE reply was sent; Camel must retry so the orchestrator eventually gets a reply.
+        CompensateInvoiceCommand command = new CompensateInvoiceCommand(
+            "saga-1", SagaStep.PROCESS_INVOICE, "corr-1", "process-invoice", "doc-001", "invoice"
+        );
+        doThrow(new RuntimeException("Unexpected DB outage"))
+            .when(compensateInvoiceUseCase).compensate(any(), any(), any(), any());
+
+        // When/Then — propagates to Camel DLC for retry
+        assertThrows(RuntimeException.class,
+            () -> sagaCommandHandler.handleCompensation(command));
 
         verify(compensateInvoiceUseCase).compensate(any(), any(), any(), any());
     }
