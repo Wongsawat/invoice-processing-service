@@ -612,11 +612,11 @@ public class InvoiceParserServiceImpl implements InvoiceParserPort {
      * (e.g. 2025-01-01T23:30:00 without offset) as the previous calendar day.
      */
     private LocalDate convertXMLGregorianCalendarToLocalDate(XMLGregorianCalendar calendar) {
-        ZoneId zone = (calendar.getTimezone() == DatatypeConstants.FIELD_UNDEFINED)
-            ? TH_ZONE
-            : calendar.toGregorianCalendar().getTimeZone().toZoneId();
+        if (calendar.getTimezone() == DatatypeConstants.FIELD_UNDEFINED) {
+            return LocalDate.of(calendar.getYear(), calendar.getMonth(), calendar.getDay());
+        }
         return calendar.toGregorianCalendar().toZonedDateTime()
-            .withZoneSameInstant(zone)
+            .withZoneSameInstant(TH_ZONE)
             .toLocalDate();
     }
 }

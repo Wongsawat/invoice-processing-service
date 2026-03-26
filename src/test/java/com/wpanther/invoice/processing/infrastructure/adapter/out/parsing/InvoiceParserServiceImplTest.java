@@ -2002,4 +2002,39 @@ class InvoiceParserServiceImplTest {
         assertEquals("VAT", invoice.getSeller().taxIdentifier().scheme(),
             "Unrecognised scheme must be normalised to VAT");
     }
+
+    @Test
+    void testParseDateTimezone_naiveTimestamp_utcJvm_yieldsCorrectThaiDate()
+            throws InvoiceParserPort.InvoiceParsingException {
+        // Naive datetime (no timezone offset) represents Bangkok local time per Thai e-Tax spec.
+        // 2025-01-01T23:30:00 without offset → issueDate must be 2025-01-01, NOT 2024-12-31
+        // (which would be the wrong result if the parser treated the value as UTC and then
+        // converted to Bangkok time via withZoneSameInstant).
+        String xml = getSampleInvoiceXmlWithIssueDate("2025-01-01T23:30:00");
+
+        ProcessedInvoice invoice = parserService.parse(xml, "tz-naive-test");
+
+        assertEquals(LocalDate.of(2025, 1, 1), invoice.getIssueDate(),
+            "Naive datetime must be read as Bangkok local date, not shifted to UTC");
+    }
+
+    @Test
+    void testParseDateTimezone_utcTimestamp_convertsToThaiDate()
+            throws InvoiceParserPort.InvoiceParsingException {
+        // Explicit UTC datetime: 2025-01-01T17:30:00Z = 2025-01-02T00:30:00+07:00 in Bangkok
+        // → issueDate must be 2025-01-02
+        String xml = getSampleInvoiceXmlWithIssueDate("2025-01-01T17:30:00Z");
+
+        ProcessedInvoice invoice = parserService.parse(xml, "tz-utc-test");
+
+        assertEquals(LocalDate.of(2025, 1, 2), invoice.getIssueDate(),
+            "UTC datetime with Z suffix must be converted to Bangkok date");
+    }
+
+    private String getSampleInvoiceXmlWithIssueDate(String issueDateTimeValue) {
+        return getSampleInvoiceXml().replace(
+            "<ram:IssueDateTime>2025-01-15T00:00:00</ram:IssueDateTime>",
+            "<ram:IssueDateTime>" + issueDateTimeValue + "</ram:IssueDateTime>"
+        );
+    }
 }
