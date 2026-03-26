@@ -23,6 +23,24 @@ CREATE UNIQUE INDEX idx_source_invoice_id ON processed_invoices(source_invoice_i
 CREATE INDEX idx_status ON processed_invoices(status);
 CREATE INDEX idx_issue_date ON processed_invoices(issue_date);
 
+-- Auto-update updated_at on every row-level UPDATE.
+-- DEFAULT CURRENT_TIMESTAMP only fires on INSERT; without this trigger the column
+-- would always equal created_at after the first status transition.
+-- The application-layer JPQL query also sets updated_at explicitly (because @Modifying
+-- bypasses Hibernate lifecycle callbacks), but this trigger provides a DB-level
+-- safety net for direct SQL updates that bypass the application.
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_processed_invoices_updated_at
+    BEFORE UPDATE ON processed_invoices
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 -- Create invoice_parties table
 CREATE TABLE invoice_parties (
     id UUID PRIMARY KEY,
