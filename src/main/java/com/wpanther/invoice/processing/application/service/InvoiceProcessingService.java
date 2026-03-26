@@ -41,6 +41,14 @@ import java.util.Optional;
 public class InvoiceProcessingService
         implements ProcessInvoiceUseCase, CompensateInvoiceUseCase {
 
+    /**
+     * The name of the unique index on {@code processed_invoices.source_invoice_id},
+     * as declared in the Flyway V1 migration. Published as a package-visible constant
+     * so that {@code SchemaInvariantValidator} can verify the index exists at startup
+     * without duplicating the literal string.
+     */
+    public static final String SOURCE_INVOICE_ID_INDEX = "idx_source_invoice_id";
+
     private final ProcessedInvoiceRepository invoiceRepository;
     private final InvoiceParserPort parserPort;
     private final SagaReplyPort sagaReplyPort;
@@ -350,14 +358,6 @@ public class InvoiceProcessingService
                 documentId, saveEx.getMessage());
         }
     }
-
-    /**
-     * The name of the unique index on {@code processed_invoices.source_invoice_id},
-     * as declared in the Flyway V1 migration. Published as a package-visible constant
-     * so that {@code SchemaInvariantValidator} can verify the index exists at startup
-     * without duplicating the literal string.
-     */
-    public static final String SOURCE_INVOICE_ID_INDEX = "idx_source_invoice_id";
 
     /**
      * Returns {@code true} only when the exception is specifically a unique_violation
