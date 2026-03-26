@@ -39,8 +39,11 @@ public class ProcessedInvoiceRepositoryImpl implements ProcessedInvoiceRepositor
      * </ul>
      *
      * <p>Violating the contract by passing a non-PROCESSING invoice that has never been
-     * INSERTed is detected by an {@link IllegalStateException} thrown unconditionally
-     * (not {@code assert}) so the failure is loud in all environments, including production.
+     * INSERTed is detected by checking the row count returned by {@code updateStatusFields}.
+     * Zero rows affected means the invoice was never INSERTed; an {@link IllegalStateException}
+     * is thrown unconditionally (not {@code assert}) so the failure is loud in all environments,
+     * including production.  This replaces the previous {@code existsById} pre-check, eliminating
+     * an extra SELECT on every update path call.
      */
     @Override
     @Transactional
@@ -52,8 +55,7 @@ public class ProcessedInvoiceRepositoryImpl implements ProcessedInvoiceRepositor
         ProcessedInvoice result;
         // PROCESSING is the first status ever persisted: the service always calls
         // startProcessing() before the initial save(), so PENDING is never committed
-        // to the database. Use this as a zero-cost insert/update discriminator,
-        // eliminating the existsById SELECT that would otherwise be needed on every call.
+        // to the database. Use this as a zero-cost insert/update discriminator.
         if (invoice.getStatus() == ProcessingStatus.PROCESSING) {
             // New entity — full mapping. saveAndFlush forces the INSERT immediately
             // so that @CreationTimestamp/@Version are populated on the returned entity
@@ -61,21 +63,19 @@ public class ProcessedInvoiceRepositoryImpl implements ProcessedInvoiceRepositor
             ProcessedInvoiceEntity saved = jpaRepository.saveAndFlush(mapper.toEntity(invoice));
             result = mapper.toDomain(saved);
         } else {
-            // Guard: a non-PROCESSING invoice passed to save() must already exist in the
-            // database — otherwise the UPDATE below silently affects zero rows (data loss).
-            // Throws unconditionally (not assert) so contract violations are caught in
-            // production regardless of whether the JVM was started with -ea.
-            if (!jpaRepository.existsById(id)) {
+            // Existing entity — update only mutable fields via direct UPDATE,
+            // avoiding a full SELECT + dirty-check cycle on every state transition.
+            // The returned row count is the sole indicator of existence: 0 means the
+            // invoice was never INSERTed (contract violation); no separate existsById
+            // SELECT is needed.
+            int updated = jpaRepository.updateStatusFields(
+                id, invoice.getStatus(), invoice.getErrorMessage(), invoice.getProcessedAt());
+            if (updated == 0) {
                 throw new IllegalStateException(
                     "save() called with non-PROCESSING status on unpersisted invoice: " + id
                     + " (status=" + invoice.getStatus() + "). Callers must call startProcessing()"
                     + " and save() once with PROCESSING status before updating to another status.");
             }
-
-            // Existing entity — update only mutable fields via direct UPDATE,
-            // avoiding a full SELECT + dirty-check cycle on every state transition.
-            jpaRepository.updateStatusFields(
-                id, invoice.getStatus(), invoice.getErrorMessage(), invoice.getProcessedAt());
             result = invoice;
         }
 
