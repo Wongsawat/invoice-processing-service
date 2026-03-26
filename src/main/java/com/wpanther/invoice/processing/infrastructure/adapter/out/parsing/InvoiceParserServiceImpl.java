@@ -117,36 +117,18 @@ public class InvoiceParserServiceImpl implements InvoiceParserPort {
     }
 
     /**
-     * Package-private constructor for unit tests that need fine-grained timeout control
-     * (e.g. 100 ms instead of 10 s) without a Spring context. Uses the default 30-day
-     * due-date fallback and unbounded concurrency.
-     */
-    InvoiceParserServiceImpl(long timeout, TimeUnit unit) {
-        this(unit.toMillis(timeout), 30, Integer.MAX_VALUE);
-    }
-
-    /**
-     * Package-private constructor for unit tests that need both a custom timeout
-     * and a custom due-date default (e.g. to verify the configurable value is used).
-     */
-    InvoiceParserServiceImpl(long timeout, TimeUnit unit, int defaultDueDateDays) {
-        this(unit.toMillis(timeout), defaultDueDateDays, Integer.MAX_VALUE);
-    }
-
-    /**
-     * Package-private constructor for tests that need to exercise the concurrency cap.
+     * Package-private constructor for unit tests — the single test entry point.
+     * Accepts all configurable parameters so tests can exercise any combination
+     * without requiring a Spring context. Common defaults for tests that don't
+     * care about a specific parameter:
+     * <ul>
+     *   <li>timeout: {@code 10, TimeUnit.SECONDS}</li>
+     *   <li>defaultDueDateDays: {@code 30}</li>
+     *   <li>maxConcurrentParses: {@code Integer.MAX_VALUE} (unbounded)</li>
+     * </ul>
      */
     InvoiceParserServiceImpl(long timeout, TimeUnit unit, int defaultDueDateDays, int maxConcurrentParses) {
         this(unit.toMillis(timeout), defaultDueDateDays, maxConcurrentParses);
-    }
-
-    /**
-     * No-arg constructor kept for existing test classes that call
-     * {@code new InvoiceParserServiceImpl()} directly. Uses production defaults
-     * and unbounded concurrency (tests are single-threaded).
-     */
-    InvoiceParserServiceImpl() {
-        this(TimeUnit.SECONDS.toMillis(10), 30, Integer.MAX_VALUE);
     }
 
     private InvoiceParserServiceImpl(long parseTimeoutMs, int defaultDueDateDays, int maxConcurrentParses) {

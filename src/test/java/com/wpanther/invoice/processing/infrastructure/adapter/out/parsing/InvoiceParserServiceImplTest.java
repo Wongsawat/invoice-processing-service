@@ -30,7 +30,7 @@ class InvoiceParserServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        parserService = new InvoiceParserServiceImpl();
+        parserService = new InvoiceParserServiceImpl(10, java.util.concurrent.TimeUnit.SECONDS, 30, Integer.MAX_VALUE);
     }
 
     @Test
@@ -39,7 +39,8 @@ class InvoiceParserServiceImplTest {
             mockedJaxb.when(() -> JAXBContext.newInstance(anyString()))
                 .thenThrow(new JAXBException("Simulated JAXB failure"));
 
-            assertThrows(IllegalStateException.class, () -> new InvoiceParserServiceImpl());
+            assertThrows(IllegalStateException.class,
+                () -> new InvoiceParserServiceImpl(10, java.util.concurrent.TimeUnit.SECONDS, 30, Integer.MAX_VALUE));
         }
     }
 
@@ -53,7 +54,7 @@ class InvoiceParserServiceImplTest {
             when(mockContext.createUnmarshaller()).thenReturn(mockUnmarshaller);
             when(mockUnmarshaller.unmarshal(any(Source.class))).thenReturn("unexpected-string-type");
 
-            InvoiceParserServiceImpl service = new InvoiceParserServiceImpl();
+            InvoiceParserServiceImpl service = new InvoiceParserServiceImpl(10, java.util.concurrent.TimeUnit.SECONDS, 30, Integer.MAX_VALUE);
 
             InvoiceParserPort.InvoiceParsingException ex = assertThrows(
                 InvoiceParserPort.InvoiceParsingException.class,
@@ -1931,7 +1932,8 @@ class InvoiceParserServiceImplTest {
             doThrow(new ParserConfigurationException("Simulated config failure"))
                 .when(mockFactory).setFeature(anyString(), anyBoolean());
 
-            assertThrows(IllegalStateException.class, () -> new InvoiceParserServiceImpl());
+            assertThrows(IllegalStateException.class,
+                () -> new InvoiceParserServiceImpl(10, java.util.concurrent.TimeUnit.SECONDS, 30, Integer.MAX_VALUE));
         }
     }
 
@@ -1952,7 +1954,7 @@ class InvoiceParserServiceImplTest {
     void parse_whenParseTimesOut_throwsInvoiceParsingException() throws Exception {
         // Use a 1 ms timeout so even a trivial parse triggers the timeout guard.
         InvoiceParserServiceImpl fastTimeoutService =
-            new InvoiceParserServiceImpl(1, java.util.concurrent.TimeUnit.MILLISECONDS);
+            new InvoiceParserServiceImpl(1, java.util.concurrent.TimeUnit.MILLISECONDS, 30, Integer.MAX_VALUE);
 
         // Any valid-ish XML — the timeout fires before JAXB produces a result.
         String anyXml = getSampleInvoiceXml();
