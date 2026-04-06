@@ -1,6 +1,5 @@
 package com.wpanther.invoice.processing.domain.event;
 
-import com.wpanther.invoice.processing.domain.model.InvoiceId;
 import com.wpanther.invoice.processing.domain.model.Money;
 
 import java.time.Instant;
@@ -15,7 +14,7 @@ import java.time.Instant;
  * The canonical constructor is available for tests that require a fixed timestamp.
  */
 public record InvoiceProcessedDomainEvent(
-    InvoiceId documentId,
+    String documentId,
     String documentNumber,
     Money total,
     String sagaId,
@@ -23,7 +22,7 @@ public record InvoiceProcessedDomainEvent(
     Instant occurredAt
 ) {
     public static InvoiceProcessedDomainEvent of(
-            InvoiceId documentId,
+            String documentId,
             String documentNumber,
             Money total,
             String sagaId,

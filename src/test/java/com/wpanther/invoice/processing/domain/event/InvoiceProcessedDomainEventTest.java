@@ -1,6 +1,5 @@
 package com.wpanther.invoice.processing.domain.event;
 
-import com.wpanther.invoice.processing.domain.model.InvoiceId;
 import com.wpanther.invoice.processing.domain.model.Money;
 import org.junit.jupiter.api.Test;
 
@@ -13,15 +12,15 @@ class InvoiceProcessedDomainEventTest {
 
     @Test
     void shouldCreateEventWithAllFields() {
-        InvoiceId id = InvoiceId.generate();
+        String documentId = "DOC-550e8400-e29b-41d4-a716-446655440000";
         Money total = new Money(new BigDecimal("1000.00"), "THB");
         Instant now = Instant.now();
 
         InvoiceProcessedDomainEvent event = new InvoiceProcessedDomainEvent(
-            id, "INV-001", total, "saga-123", "corr-123", now
+            documentId, "INV-001", total, "saga-123", "corr-123", now
         );
 
-        assertThat(event.documentId()).isEqualTo(id);
+        assertThat(event.documentId()).isEqualTo(documentId);
         assertThat(event.documentNumber()).isEqualTo("INV-001");
         assertThat(event.total()).isEqualTo(total);
         assertThat(event.sagaId()).isEqualTo("saga-123");
@@ -31,12 +30,12 @@ class InvoiceProcessedDomainEventTest {
 
     @Test
     void shouldBeEqualWhenAllFieldsMatch() {
-        InvoiceId id = InvoiceId.generate();
+        String documentId = "DOC-550e8400-e29b-41d4-a716-446655440001";
         Money total = new Money(new BigDecimal("500.00"), "THB");
         Instant now = Instant.now();
 
-        InvoiceProcessedDomainEvent e1 = new InvoiceProcessedDomainEvent(id, "INV-002", total, "saga-1", "c-1", now);
-        InvoiceProcessedDomainEvent e2 = new InvoiceProcessedDomainEvent(id, "INV-002", total, "saga-1", "c-1", now);
+        InvoiceProcessedDomainEvent e1 = new InvoiceProcessedDomainEvent(documentId, "INV-002", total, "saga-1", "c-1", now);
+        InvoiceProcessedDomainEvent e2 = new InvoiceProcessedDomainEvent(documentId, "INV-002", total, "saga-1", "c-1", now);
 
         assertThat(e1).isEqualTo(e2);
     }

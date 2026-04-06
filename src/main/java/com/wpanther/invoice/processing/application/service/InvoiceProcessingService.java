@@ -153,7 +153,7 @@ public class InvoiceProcessingService
                     existingInvoice.markCompleted();
                     invoiceRepository.save(existingInvoice);
                     eventPublishingPort.publish(InvoiceProcessedDomainEvent.of(
-                        existingInvoice.getId(),
+                        existingInvoice.getSourceInvoiceId(),
                         existingInvoice.getInvoiceNumber(),
                         existingInvoice.getTotal(),
                         sagaId,
@@ -185,7 +185,7 @@ public class InvoiceProcessingService
             completedStateSaved = true; // entity is now in DB as COMPLETED
 
             eventPublishingPort.publish(InvoiceProcessedDomainEvent.of(
-                invoice.getId(),
+                invoice.getSourceInvoiceId(),
                 invoice.getInvoiceNumber(),
                 invoice.getTotal(),
                 sagaId,

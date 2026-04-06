@@ -36,7 +36,7 @@ public class InvoiceProcessedEvent extends TraceEvent {
     /**
      * Convenience constructor for creating the event.
      *
-     * @param documentId     the processed document ID
+     * @param documentId     the external source document ID (DOC-xxx format)
      * @param documentNumber the document number
      * @param totalAmount    the invoice grand total
      * @param currency       the currency code

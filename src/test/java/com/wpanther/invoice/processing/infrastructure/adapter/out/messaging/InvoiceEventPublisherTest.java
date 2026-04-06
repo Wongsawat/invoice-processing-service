@@ -3,7 +3,6 @@ package com.wpanther.invoice.processing.infrastructure.adapter.out.messaging;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.invoice.processing.domain.event.InvoiceProcessedDomainEvent;
-import com.wpanther.invoice.processing.domain.model.InvoiceId;
 import com.wpanther.invoice.processing.domain.model.Money;
 import com.wpanther.invoice.processing.application.dto.event.InvoiceProcessedEvent;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
@@ -44,9 +43,9 @@ class InvoiceEventPublisherTest {
     @Test
     void publish_savesEventToOutboxWithCorrectTopic() throws JsonProcessingException {
         // Given
-        InvoiceId invoiceId = InvoiceId.generate();
+        String documentId = "DOC-550e8400-e29b-41d4-a716-446655440000";
         InvoiceProcessedDomainEvent domainEvent = new InvoiceProcessedDomainEvent(
-            invoiceId,
+            documentId,
             "INV-DOM-001",
             Money.of(new BigDecimal("5000.00"), "THB"),
             "saga-dom-1",
@@ -62,19 +61,18 @@ class InvoiceEventPublisherTest {
         verify(outboxService).saveWithRouting(
             any(InvoiceProcessedEvent.class),
             eq("ProcessedInvoice"),
-            eq(invoiceId.value().toString()),
+            eq(documentId),
             eq("invoice.processed"),
-            eq(invoiceId.value().toString()),
+            eq(documentId),
             anyString()
         );
     }
 
     @Test
-    void publish_usesInvoiceIdAsAggregateIdAndPartitionKey() throws JsonProcessingException {
-        InvoiceId invoiceId = InvoiceId.generate();
-        String expectedId = invoiceId.value().toString();
+    void publish_usesDocumentIdAsAggregateIdAndPartitionKey() throws JsonProcessingException {
+        String documentId = "DOC-550e8400-e29b-41d4-a716-446655440001";
         InvoiceProcessedDomainEvent domainEvent = new InvoiceProcessedDomainEvent(
-            invoiceId, "INV-DOM-002",
+            documentId, "INV-DOM-002",
             Money.of(new BigDecimal("1000.00"), "THB"),
             "saga-dom-2", "corr-dom-2", Instant.now()
         );
@@ -83,14 +81,14 @@ class InvoiceEventPublisherTest {
         eventPublisher.publish(domainEvent);
 
         verify(outboxService).saveWithRouting(
-            any(), eq("ProcessedInvoice"), eq(expectedId), any(), eq(expectedId), any()
+            any(), eq("ProcessedInvoice"), eq(documentId), any(), eq(documentId), any()
         );
     }
 
     @Test
     void publish_whenOutboxFails_propagatesException() throws JsonProcessingException {
         InvoiceProcessedDomainEvent domainEvent = new InvoiceProcessedDomainEvent(
-            InvoiceId.generate(), "INV-DOM-ERR",
+            "DOC-550e8400-e29b-41d4-a716-446655440002", "INV-DOM-ERR",
             Money.of(new BigDecimal("100.00"), "THB"),
             "saga-dom-err", "corr-dom-err", Instant.now()
         );
@@ -104,7 +102,7 @@ class InvoiceEventPublisherTest {
     @Test
     void publish_headersFallbackWhenSerializationFails() throws JsonProcessingException {
         InvoiceProcessedDomainEvent domainEvent = new InvoiceProcessedDomainEvent(
-            InvoiceId.generate(), "INV-DOM-HDR",
+            "DOC-550e8400-e29b-41d4-a716-446655440003", "INV-DOM-HDR",
             Money.of(new BigDecimal("200.00"), "THB"),
             "saga-dom-hdr", "corr-dom-hdr", Instant.now()
         );
