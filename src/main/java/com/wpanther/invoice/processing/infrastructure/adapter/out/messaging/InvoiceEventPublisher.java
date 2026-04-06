@@ -42,8 +42,8 @@ public class InvoiceEventPublisher implements InvoiceEventPublishingPort {
     @Transactional(propagation = Propagation.MANDATORY)
     public void publish(InvoiceProcessedDomainEvent domainEvent) {
         InvoiceProcessedEvent kafkaEvent = new InvoiceProcessedEvent(
-            domainEvent.invoiceId().toString(),
-            domainEvent.invoiceNumber(),
+            domainEvent.documentId().toString(),
+            domainEvent.documentNumber(),
             domainEvent.total().amount(),
             domainEvent.total().currency(),
             domainEvent.sagaId(),
@@ -52,19 +52,19 @@ public class InvoiceEventPublisher implements InvoiceEventPublishingPort {
 
         Map<String, String> headers = Map.of(
             "correlationId", domainEvent.correlationId(),
-            "invoiceNumber", domainEvent.invoiceNumber()
+            "documentNumber", domainEvent.documentNumber()
         );
 
         outboxService.saveWithRouting(
             kafkaEvent,
             "ProcessedInvoice",
-            domainEvent.invoiceId().toString(),
+            domainEvent.documentId().toString(),
             invoiceProcessedTopic,
-            domainEvent.invoiceId().toString(),
+            domainEvent.documentId().toString(),
             headerSerializer.toJson(headers)
         );
 
-        log.info("Published InvoiceProcessedEvent to outbox: {}", domainEvent.invoiceNumber());
+        log.info("Published InvoiceProcessedEvent to outbox: {}", domainEvent.documentNumber());
     }
 
 }

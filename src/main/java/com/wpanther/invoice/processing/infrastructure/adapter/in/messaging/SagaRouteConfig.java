@@ -83,7 +83,7 @@ public class SagaRouteConfig extends RouteBuilder {
             .process(exchange -> {
                 ProcessInvoiceCommand cmd = exchange.getIn().getBody(ProcessInvoiceCommand.class);
                 log.info("Processing saga command for saga: {}, invoice: {}",
-                    cmd.getSagaId(), cmd.getInvoiceNumber());
+                    cmd.getSagaId(), cmd.getDocumentNumber());
                 sagaCommandHandler.handleProcessCommand(cmd);
             })
             .log("Successfully processed saga command");

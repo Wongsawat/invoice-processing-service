@@ -15,19 +15,19 @@ import java.time.Instant;
  * The canonical constructor is available for tests that require a fixed timestamp.
  */
 public record InvoiceProcessedDomainEvent(
-    InvoiceId invoiceId,
-    String invoiceNumber,
+    InvoiceId documentId,
+    String documentNumber,
     Money total,
     String sagaId,
     String correlationId,
     Instant occurredAt
 ) {
     public static InvoiceProcessedDomainEvent of(
-            InvoiceId invoiceId,
-            String invoiceNumber,
+            InvoiceId documentId,
+            String documentNumber,
             Money total,
             String sagaId,
             String correlationId) {
-        return new InvoiceProcessedDomainEvent(invoiceId, invoiceNumber, total, sagaId, correlationId, Instant.now());
+        return new InvoiceProcessedDomainEvent(documentId, documentNumber, total, sagaId, correlationId, Instant.now());
     }
 }

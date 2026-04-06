@@ -24,8 +24,8 @@ public class ProcessInvoiceCommand extends SagaCommand {
     @JsonProperty("xmlContent")
     private final String xmlContent;
 
-    @JsonProperty("invoiceNumber")
-    private final String invoiceNumber;
+    @JsonProperty("documentNumber")
+    private final String documentNumber;
 
     @JsonCreator
     public ProcessInvoiceCommand(
@@ -38,21 +38,21 @@ public class ProcessInvoiceCommand extends SagaCommand {
             @JsonProperty("correlationId") String correlationId,
             @JsonProperty("documentId") String documentId,
             @JsonProperty("xmlContent") String xmlContent,
-            @JsonProperty("invoiceNumber") String invoiceNumber) {
+            @JsonProperty("documentNumber") String documentNumber) {
         super(eventId, occurredAt, eventType, version, sagaId, sagaStep, correlationId);
         this.documentId = documentId;
         this.xmlContent = xmlContent;
-        this.invoiceNumber = invoiceNumber;
+        this.documentNumber = documentNumber;
     }
 
     /**
      * Convenience constructor for testing.
      */
     public ProcessInvoiceCommand(String sagaId, SagaStep sagaStep, String correlationId,
-                                 String documentId, String xmlContent, String invoiceNumber) {
+                                 String documentId, String xmlContent, String documentNumber) {
         super(sagaId, sagaStep, correlationId);
         this.documentId = documentId;
         this.xmlContent = xmlContent;
-        this.invoiceNumber = invoiceNumber;
+        this.documentNumber = documentNumber;
     }
 }

@@ -15,23 +15,23 @@ class InvoiceProcessedEventTest {
     @Test
     void testCreateEvent() {
         // Given
-        String invoiceId = "invoice-123";
-        String invoiceNumber = "INV-001";
-        BigDecimal total = new BigDecimal("10000.00");
+        String documentId = "invoice-123";
+        String documentNumber = "INV-001";
+        BigDecimal totalAmount = new BigDecimal("10000.00");
         String currency = "THB";
         String sagaId = "saga-123";
         String correlationId = "correlation-123";
 
         // When
         InvoiceProcessedEvent event = new InvoiceProcessedEvent(
-            invoiceId, invoiceNumber, total, currency, sagaId, correlationId
+            documentId, documentNumber, totalAmount, currency, sagaId, correlationId
         );
 
         // Then
         assertNotNull(event);
-        assertEquals(invoiceId, event.getInvoiceId());
-        assertEquals(invoiceNumber, event.getInvoiceNumber());
-        assertEquals(total, event.getTotal());
+        assertEquals(documentId, event.getDocumentId());
+        assertEquals(documentNumber, event.getDocumentNumber());
+        assertEquals(totalAmount, event.getTotalAmount());
         assertEquals(currency, event.getCurrency());
         assertEquals(sagaId, event.getSagaId());
         assertEquals(correlationId, event.getCorrelationId());
@@ -61,9 +61,9 @@ class InvoiceProcessedEventTest {
 
         // Then
         assertEquals(event.getEventId(), deserialized.getEventId());
-        assertEquals(event.getInvoiceId(), deserialized.getInvoiceId());
-        assertEquals(event.getInvoiceNumber(), deserialized.getInvoiceNumber());
-        assertEquals(event.getTotal(), deserialized.getTotal());
+        assertEquals(event.getDocumentId(), deserialized.getDocumentId());
+        assertEquals(event.getDocumentNumber(), deserialized.getDocumentNumber());
+        assertEquals(event.getTotalAmount(), deserialized.getTotalAmount());
         assertEquals(event.getCurrency(), deserialized.getCurrency());
         assertEquals(event.getCorrelationId(), deserialized.getCorrelationId());
     }

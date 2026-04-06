@@ -129,7 +129,7 @@ class InvoiceProcessingServiceTest {
         verify(eventPublisher).publish(eventCaptor.capture());
 
         InvoiceProcessedDomainEvent event = eventCaptor.getValue();
-        assertEquals("INV-001", event.invoiceNumber());
+        assertEquals("INV-001", event.documentNumber());
         assertEquals("THB", event.total().currency());
         assertEquals("saga-1", event.sagaId());
         assertEquals("correlation-123", event.correlationId());
@@ -193,7 +193,7 @@ class InvoiceProcessingServiceTest {
         verify(invoiceRepository).save(stuckInvoice);
         ArgumentCaptor<InvoiceProcessedDomainEvent> eventCaptor = ArgumentCaptor.forClass(InvoiceProcessedDomainEvent.class);
         verify(eventPublisher).publish(eventCaptor.capture());
-        assertEquals("INV-STUCK", eventCaptor.getValue().invoiceNumber());
+        assertEquals("INV-STUCK", eventCaptor.getValue().documentNumber());
         assertEquals("saga-1", eventCaptor.getValue().sagaId());
         assertEquals("correlation-123", eventCaptor.getValue().correlationId());
         verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.PROCESS_INVOICE, "correlation-123");
@@ -230,7 +230,7 @@ class InvoiceProcessingServiceTest {
         verify(eventPublisher).publish(eventCaptor.capture());
 
         InvoiceProcessedDomainEvent event = eventCaptor.getValue();
-        assertEquals("INV-001", event.invoiceNumber());
+        assertEquals("INV-001", event.documentNumber());
         assertEquals("THB", event.total().currency());
         assertEquals("saga-1", event.sagaId());
         assertEquals("correlation-123", event.correlationId());

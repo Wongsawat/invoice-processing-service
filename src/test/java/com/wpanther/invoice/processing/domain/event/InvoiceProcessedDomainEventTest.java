@@ -21,8 +21,8 @@ class InvoiceProcessedDomainEventTest {
             id, "INV-001", total, "saga-123", "corr-123", now
         );
 
-        assertThat(event.invoiceId()).isEqualTo(id);
-        assertThat(event.invoiceNumber()).isEqualTo("INV-001");
+        assertThat(event.documentId()).isEqualTo(id);
+        assertThat(event.documentNumber()).isEqualTo("INV-001");
         assertThat(event.total()).isEqualTo(total);
         assertThat(event.sagaId()).isEqualTo("saga-123");
         assertThat(event.correlationId()).isEqualTo("corr-123");
