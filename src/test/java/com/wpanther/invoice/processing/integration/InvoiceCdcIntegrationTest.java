@@ -148,7 +148,8 @@ class InvoiceCdcIntegrationTest extends AbstractCdcIntegrationTest {
         assertThat(payload.has("documentId")).isTrue();
         assertThat(payload.get("documentId").asText()).isEqualTo(documentId);
         assertThat(payload.get("documentNumber").asText()).isEqualTo(invoiceNumber);
-        assertThat(payload.get("totalAmount").asText()).isEqualTo("64200.00");
+        assertThat(new java.math.BigDecimal(payload.get("totalAmount").asText())
+            .compareTo(new java.math.BigDecimal("64200.00"))).isZero();
         assertThat(payload.get("currency").asText()).isEqualTo("THB");
     }
 
