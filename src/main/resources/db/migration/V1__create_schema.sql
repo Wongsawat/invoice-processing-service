@@ -1,27 +1,32 @@
--- Create processed_invoices table
+-- =============================================================================
+-- Invoice Processing Service — Initial Schema
+-- =============================================================================
+
+-- ─── processed_invoices ───────────────────────────────────────────────────────
+
 CREATE TABLE processed_invoices (
-    id UUID PRIMARY KEY,
+    id               UUID          PRIMARY KEY,
     source_invoice_id VARCHAR(100) NOT NULL,
-    invoice_number VARCHAR(50) NOT NULL,
-    issue_date DATE NOT NULL,
-    due_date DATE NOT NULL,
-    currency VARCHAR(3) NOT NULL,
-    subtotal DECIMAL(15,2) NOT NULL,
-    total_tax DECIMAL(15,2) NOT NULL,
-    total DECIMAL(15,2) NOT NULL,
-    original_xml TEXT NOT NULL,
-    status VARCHAR(20) NOT NULL,
-    error_message TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    processed_at TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version BIGINT NOT NULL DEFAULT 0
+    invoice_number   VARCHAR(50)  NOT NULL,
+    issue_date       DATE         NOT NULL,
+    due_date         DATE         NOT NULL,
+    currency         VARCHAR(3)   NOT NULL,
+    subtotal         DECIMAL(15,2) NOT NULL,
+    total_tax        DECIMAL(15,2) NOT NULL,
+    total            DECIMAL(15,2) NOT NULL,
+    original_xml     TEXT         NOT NULL,
+    status           VARCHAR(20)  NOT NULL,
+    error_message    TEXT,
+    created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    processed_at     TIMESTAMP,
+    updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version          BIGINT       NOT NULL DEFAULT 0
 );
 
 CREATE UNIQUE INDEX idx_invoice_number_unique ON processed_invoices(invoice_number);
-CREATE UNIQUE INDEX idx_source_invoice_id ON processed_invoices(source_invoice_id);
-CREATE INDEX idx_status ON processed_invoices(status);
-CREATE INDEX idx_issue_date ON processed_invoices(issue_date);
+CREATE UNIQUE INDEX idx_source_invoice_id     ON processed_invoices(source_invoice_id);
+CREATE INDEX idx_status                       ON processed_invoices(status);
+CREATE INDEX idx_issue_date                   ON processed_invoices(issue_date);
 
 -- Auto-update updated_at on every row-level UPDATE.
 -- DEFAULT CURRENT_TIMESTAMP only fires on INSERT; without this trigger the column
@@ -41,65 +46,98 @@ CREATE TRIGGER trg_processed_invoices_updated_at
     BEFORE UPDATE ON processed_invoices
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Create invoice_parties table
+-- ─── invoice_parties ─────────────────────────────────────────────────────────
+
 CREATE TABLE invoice_parties (
-    id UUID PRIMARY KEY,
-    invoice_id UUID NOT NULL,
-    party_type VARCHAR(10) NOT NULL,
-    name VARCHAR(200) NOT NULL,
-    tax_id VARCHAR(50),
-    tax_id_scheme VARCHAR(20),
+    id             UUID          PRIMARY KEY,
+    invoice_id     UUID          NOT NULL,
+    party_type     VARCHAR(10)   NOT NULL,
+    name           VARCHAR(200)  NOT NULL,
+    tax_id         VARCHAR(50),
+    tax_id_scheme  VARCHAR(20),
     street_address VARCHAR(500),
-    city VARCHAR(100),
-    postal_code VARCHAR(20),
-    country VARCHAR(2),
-    email VARCHAR(200),
-    CONSTRAINT fk_invoice_parties_invoice FOREIGN KEY (invoice_id)
-        REFERENCES processed_invoices(id) ON DELETE CASCADE
+    city           VARCHAR(100),
+    postal_code    VARCHAR(20),
+    country        VARCHAR(2),
+    email          VARCHAR(200),
+    CONSTRAINT fk_invoice_parties_invoice
+        FOREIGN KEY (invoice_id) REFERENCES processed_invoices(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_party_invoice ON invoice_parties(invoice_id);
-CREATE INDEX idx_party_type ON invoice_parties(party_type);
+CREATE INDEX idx_party_type    ON invoice_parties(party_type);
 
--- Create invoice_line_items table
+-- ─── invoice_line_items ──────────────────────────────────────────────────────
+
 CREATE TABLE invoice_line_items (
-    id UUID PRIMARY KEY,
-    invoice_id UUID NOT NULL,
-    line_number INTEGER NOT NULL,
-    description VARCHAR(500) NOT NULL,
-    quantity INTEGER NOT NULL,
-    unit_price DECIMAL(15,2) NOT NULL,
-    tax_rate DECIMAL(5,2) NOT NULL,
-    line_total DECIMAL(15,2) NOT NULL,
-    tax_amount DECIMAL(15,2) NOT NULL,
-    CONSTRAINT fk_invoice_line_items_invoice FOREIGN KEY (invoice_id)
-        REFERENCES processed_invoices(id) ON DELETE CASCADE
+    id          UUID          PRIMARY KEY,
+    invoice_id  UUID          NOT NULL,
+    line_number INTEGER       NOT NULL,
+    description VARCHAR(500)  NOT NULL,
+    quantity    INTEGER       NOT NULL,
+    unit_price  DECIMAL(15,2) NOT NULL,
+    tax_rate    DECIMAL(5,2)  NOT NULL,
+    line_total  DECIMAL(15,2) NOT NULL,
+    tax_amount  DECIMAL(15,2) NOT NULL,
+    CONSTRAINT fk_invoice_line_items_invoice
+        FOREIGN KEY (invoice_id) REFERENCES processed_invoices(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_line_item_invoice ON invoice_line_items(invoice_id);
+CREATE INDEX idx_line_item_invoice        ON invoice_line_items(invoice_id);
 CREATE UNIQUE INDEX idx_invoice_line_number ON invoice_line_items(invoice_id, line_number);
 
--- Create outbox_events table (Transactional Outbox pattern for Debezium CDC)
+-- ─── outbox_events ───────────────────────────────────────────────────────────
+-- Transactional Outbox pattern — Debezium CDC reads PENDING rows and publishes
+-- them to Kafka, guaranteeing at-least-once delivery without dual writes.
+
 CREATE TABLE outbox_events (
-    id UUID PRIMARY KEY,
+    id            UUID         PRIMARY KEY,
     aggregate_type VARCHAR(100) NOT NULL,
-    aggregate_id VARCHAR(100) NOT NULL,
-    event_type VARCHAR(100) NOT NULL,
-    payload TEXT NOT NULL,
-    topic VARCHAR(255),
+    aggregate_id  VARCHAR(100) NOT NULL,
+    event_type    VARCHAR(100) NOT NULL,
+    payload       TEXT         NOT NULL,
+    topic         VARCHAR(255),
     partition_key VARCHAR(255),
-    headers TEXT,
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-    retry_count INTEGER DEFAULT 0,
+    headers       TEXT,
+    status        VARCHAR(20)  NOT NULL DEFAULT 'PENDING',
+    retry_count   INTEGER               DEFAULT 0,
     error_message VARCHAR(1000),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    published_at TIMESTAMP
+    created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at  TIMESTAMP
 );
 
-CREATE INDEX idx_outbox_status ON outbox_events(status);
-CREATE INDEX idx_outbox_created ON outbox_events(created_at);
-CREATE INDEX idx_outbox_debezium ON outbox_events(created_at) WHERE status = 'PENDING';
+CREATE INDEX idx_outbox_status    ON outbox_events(status);
+CREATE INDEX idx_outbox_created   ON outbox_events(created_at);
+CREATE INDEX idx_outbox_debezium  ON outbox_events(created_at) WHERE status = 'PENDING';
 CREATE INDEX idx_outbox_aggregate ON outbox_events(aggregate_id, aggregate_type);
 
-COMMENT ON COLUMN outbox_events.payload IS 'Event payload as JSON text (portable across databases)';
-COMMENT ON COLUMN outbox_events.headers IS 'Kafka headers as JSON text (portable across databases)';
+COMMENT ON COLUMN outbox_events.payload IS
+    'Event payload as JSON text (portable across databases)';
+COMMENT ON COLUMN outbox_events.headers IS
+    'Kafka headers as JSON text (portable across databases)';
+
+-- ─── compensation_log ────────────────────────────────────────────────────────
+-- Permanent audit trail for saga compensation events.
+-- Rows are NEVER deleted — this table is the forensic record of what was deleted and why.
+
+CREATE TABLE compensation_log (
+    id                UUID         PRIMARY KEY,
+    source_invoice_id VARCHAR(100) NOT NULL,
+    invoice_id        UUID,                       -- NULL when reason = ALREADY_ABSENT
+    invoice_number    VARCHAR(50),                -- NULL when reason = ALREADY_ABSENT
+    saga_id           VARCHAR(255) NOT NULL,
+    correlation_id    VARCHAR(255),
+    reason            VARCHAR(20)  NOT NULL,       -- COMPENSATED | ALREADY_ABSENT
+    compensated_at    TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+CREATE INDEX idx_compensation_log_source_invoice ON compensation_log(source_invoice_id);
+CREATE INDEX idx_compensation_log_saga           ON compensation_log(saga_id);
+CREATE INDEX idx_compensation_log_at             ON compensation_log(compensated_at);
+
+COMMENT ON TABLE compensation_log IS
+    'Permanent audit trail of saga compensation events. Never truncated or cleaned up.';
+COMMENT ON COLUMN compensation_log.invoice_id IS
+    'UUID of the ProcessedInvoice that was deleted. NULL if the row was already absent.';
+COMMENT ON COLUMN compensation_log.reason IS
+    'COMPENSATED = row was found and deleted; ALREADY_ABSENT = row was not found.';
