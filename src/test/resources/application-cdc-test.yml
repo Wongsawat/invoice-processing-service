@@ -6,7 +6,7 @@ spring:
     name: invoice-processing-service-cdc-test
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/process_db
+    url: jdbc:postgresql://localhost:5433/invoiceprocess_db
     driver-class-name: org.postgresql.Driver
     username: postgres
     password: postgres
